@@ -1,0 +1,415 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Unified CFDNS Manager API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: files
+    description: Local file system operations
+  - name: terminal
+    description: Terminal/command execution
+  - name: servers
+    description: Registered SSH servers
+  - name: dns
+    description: Cloudflare DNS management
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /files/list:
+    get:
+      operationId: listFiles
+      tags: [files]
+      summary: List directory contents
+      parameters:
+        - name: path
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "/"
+      responses:
+        "200":
+          description: Directory listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryListing"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/read:
+    get:
+      operationId: readFile
+      tags: [files]
+      summary: Read file content
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/write:
+    post:
+      operationId: writeFile
+      tags: [files]
+      summary: Write file content (creates or overwrites)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WriteFileBody"
+      responses:
+        "200":
+          description: Written successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/delete:
+    delete:
+      operationId: deleteFile
+      tags: [files]
+      summary: Delete a file or directory
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: recursive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/mkdir:
+    post:
+      operationId: createDirectory
+      tags: [files]
+      summary: Create a directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MkdirBody"
+      responses:
+        "200":
+          description: Directory created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/rename:
+    post:
+      operationId: renameFile
+      tags: [files]
+      summary: Rename or move a file or directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameFileBody"
+      responses:
+        "200":
+          description: Renamed/moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/raw:
+    get:
+      operationId: getRawFile
+      tags: [files]
+      summary: Stream raw file bytes with correct Content-Type header
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Absolute path to the file (must start with /)
+      responses:
+        "200":
+          description: Raw file bytes streamed with inferred Content-Type
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Bad request (missing path, non-absolute path, or path is a directory)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /terminal/exec:
+    post:
+      operationId: execCommand
+      tags: [terminal]
+      summary: Execute a shell command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecCommandBody"
+      responses:
+        "200":
+          description: Command result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status, uptime]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        uptime:
+          type: number
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    FileEntry:
+      type: object
+      required: [name, path, type, size, permissions, modifiedAt]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, directory, symlink, other]
+        size:
+          type: number
+          nullable: true
+        permissions:
+          type: string
+        modifiedAt:
+          type: string
+          format: date-time
+
+    DirectoryListing:
+      type: object
+      required: [path, entries]
+      properties:
+        path:
+          type: string
+        parentPath:
+          type: string
+          nullable: true
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileEntry"
+
+    FileContent:
+      type: object
+      required: [path, content, isBinary, size]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        isBinary:
+          type: boolean
+        size:
+          type: number
+
+    WriteFileBody:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+
+    MkdirBody:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+
+    RenameFileBody:
+      type: object
+      required: [oldPath, newPath]
+      properties:
+        oldPath:
+          type: string
+        newPath:
+          type: string
+
+    ExecCommandBody:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+        cwd:
+          type: string
+          nullable: true
+
+    ExecResult:
+      type: object
+      required: [stdout, stderr, exitCode]
+      properties:
+        stdout:
+          type: string
+        stderr:
+          type: string
+        exitCode:
+          type: number

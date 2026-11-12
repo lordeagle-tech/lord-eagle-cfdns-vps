@@ -1,0 +1,28 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import filesRouter from "./files";
+import terminalRouter from "./terminal";
+import systemRouter from "./system";
+import githubRouter from "./github";
+import settingsRouter from "./settings";
+import serversRouter from "./servers";
+import processesRouter from "./processes";
+import statsRouter from "./stats";
+import dnsRouter from "./dns";
+import { requireApiKey } from "../middleware/auth";
+
+const router: IRouter = Router();
+router.use(authRouter);
+router.use(healthRouter);
+router.use(requireApiKey);
+router.use(systemRouter);
+router.use(filesRouter);
+router.use(terminalRouter);
+router.use(githubRouter);
+router.use(settingsRouter);
+router.use(serversRouter);
+router.use(processesRouter);
+router.use(statsRouter);
+router.use(dnsRouter);
+export default router;

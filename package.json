@@ -1,0 +1,29 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "pm2:start": "pnpm run build && pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop cfdns-api",
+    "pm2:restart": "pm2 restart cfdns-api",
+    "pm2:reload": "pm2 reload cfdns-api",
+    "pm2:logs": "pm2 logs cfdns-api",
+    "pm2:status": "pm2 status",
+    "pm2:delete": "pm2 delete cfdns-api",
+    "pm2:save": "pm2 save",
+    "pm2:startup": "pm2 startup"
+  },
+  "private": true,
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "packageManager": "pnpm@10.18.0"
+}

@@ -1,0 +1,1244 @@
+import { useSearch, useLocation } from "wouter";
+import {
+  useListFiles, getListFilesQueryKey,
+  useReadFile, getReadFileQueryKey,
+  useWriteFile,
+  useDeleteFile,
+  useCreateDirectory,
+  useRenameFile,
+  useExecCommand,
+} from "@workspace/api-client-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import SyntaxHighlighter from "react-syntax-highlighter";
+import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import {
+  Folder, FileText, File as FileIcon, Image, Code2, Database,
+  ChevronRight, ArrowLeft, RefreshCw, FolderPlus, FilePlus,
+  Trash2, Edit2, MoveRight, X, Save, Terminal, AlertTriangle,
+  HardDrive, Play, ChevronDown, Copy, Check, Eraser,
+  PanelLeft, FolderOpen, Music, Video, ImageIcon, Search,
+  ScrollText, Activity, WifiOff,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatSize(bytes: number | null | undefined): string {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch { return ""; }
+}
+
+type FileType = "directory" | "file" | "symlink" | "other";
+
+function EntryIcon({ name, type, size = 18 }: { name: string; type: FileType; size?: number }) {
+  const s = { width: size, height: size, flexShrink: 0 as const };
+  if (type === "directory") return <Folder style={s} className="text-amber-400 fill-amber-400/20" />;
+  if (type === "symlink") return <FileIcon style={s} className="text-sky-400" />;
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["db", "sqlite", "sqlite3"].includes(ext)) return <Database style={s} className="text-orange-400" />;
+  if (["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp"].includes(ext)) return <Image style={s} className="text-lime-400" />;
+  if (["js", "ts", "tsx", "jsx", "py", "sh", "bash", "rb", "go", "rs", "c", "cpp", "h", "java", "php", "sql", "yaml", "yml", "json", "toml", "ini", "conf", "env", "xml", "html", "css", "scss", "md", "txt", "log"].includes(ext))
+    return <Code2 style={s} className="text-blue-400" />;
+  return <FileIcon style={s} className="text-muted-foreground" />;
+}
+
+type DialogMode = "mkdir" | "newfile" | "rename" | "move";
+
+const stripAnsi = (str: string) =>
+  str.replace(/\x1B\[[0-9;]*[a-zA-Z]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[A-Z\\[\]^_]|\r/g, "");
+
+// ── File type detection ───────────────────────────────────────────────────────
+
+type MediaKind = "image" | "video" | "audio" | "code" | "text";
+
+const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","svg","ico","bmp","tiff","avif"]);
+const VIDEO_EXTS = new Set(["mp4","webm","mkv","mov","avi","ogv","m4v","flv","3gp"]);
+const AUDIO_EXTS = new Set(["mp3","wav","ogg","flac","m4a","aac","opus","wma"]);
+const CODE_EXTS  = new Set([
+  "js","mjs","cjs","ts","tsx","jsx","py","sh","bash","zsh","fish","rb","go","rs",
+  "c","cpp","cc","h","java","php","sql","yaml","yml","json","toml","ini","conf",
+  "env","xml","html","htm","css","scss","sass","md","mdx","dockerfile","lua",
+  "swift","kt","cs","r","pl","vim","tf","hcl","nginx","nix",
+]);
+
+function detectKind(filename: string): MediaKind {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (IMAGE_EXTS.has(ext)) return "image";
+  if (VIDEO_EXTS.has(ext)) return "video";
+  if (AUDIO_EXTS.has(ext)) return "audio";
+  if (CODE_EXTS.has(ext))  return "code";
+  return "text";
+}
+
+const EXT_LANG: Record<string, string> = {
+  js: "javascript", mjs: "javascript", cjs: "javascript",
+  ts: "typescript", mts: "typescript",
+  tsx: "tsx", jsx: "jsx",
+  py: "python",
+  sh: "bash", bash: "bash", zsh: "bash", fish: "bash",
+  rb: "ruby", go: "go", rs: "rust",
+  c: "c", h: "c", cpp: "cpp", cc: "cpp",
+  java: "java", php: "php", sql: "sql",
+  yaml: "yaml", yml: "yaml", json: "json", toml: "ini",
+  xml: "xml", html: "html", htm: "html",
+  css: "css", scss: "scss", sass: "scss",
+  md: "markdown", mdx: "markdown",
+  dockerfile: "dockerfile",
+  lua: "lua", swift: "swift", kt: "kotlin", cs: "csharp",
+  r: "r", pl: "perl", vim: "vim",
+  tf: "hcl", hcl: "hcl", nix: "nix",
+  env: "bash", ini: "ini", conf: "nginx",
+};
+
+const rawUrl = (p: string) => `/api/files/raw?path=${encodeURIComponent(p)}`;
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+interface FileManagerProps {
+  initialPanel?: "terminal" | "file" | null;
+}
+
+export default function FileManager({ initialPanel = null }: FileManagerProps) {
+  const searchString = useSearch();
+  const [, navigate] = useLocation();
+  const searchParams = new URLSearchParams(searchString);
+  const currentPath = searchParams.get("path") || "/";
+  const searchQuery = searchParams.get("search") || "";
+
+  // Right panel: "file" | "terminal" | "logs" | null
+  const [rightPanel, setRightPanel] = useState<"file" | "terminal" | "logs" | null>(initialPanel);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [isEditing, setIsEditing] = useState(false);
+
+  // File list drawer (visible when right panel is active)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Logs panel
+  const [logActiveFile, setLogActiveFile] = useState<string | null>(null);
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logTailing, setLogTailing] = useState(true);
+  const [logCopied, setLogCopied] = useState(false);
+  const [logSubFiles, setLogSubFiles] = useState<string[]>([]);
+  const logRef = useRef<HTMLDivElement>(null);
+  const logIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Dialogs (mkdir / newfile / rename / move)
+  const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
+  const [dialogInput, setDialogInput] = useState("");
+  const [actionTarget, setActionTarget] = useState<{ path: string; type: FileType } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ path: string; type: FileType } | null>(null);
+
+  // Terminal
+  const [termCmd, setTermCmd] = useState("");
+  const [termCwd, setTermCwd] = useState("/");
+  const [termHistory, setTermHistory] = useState<{ cmd: string; stdout: string; stderr: string; code: number; cwd?: string }[]>([]);
+  const termRef = useRef<HTMLDivElement>(null);
+  const termInputRef = useRef<HTMLInputElement>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | "all" | null>(null);
+  const [copiedFile, setCopiedFile] = useState(false);
+
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: listing, isLoading, error: listError, refetch } = useListFiles(
+    { path: currentPath },
+    { query: { queryKey: getListFilesQueryKey({ path: currentPath }) } }
+  );
+
+  const fileKind: MediaKind | null = selectedFile
+    ? detectKind(selectedFile.split("/").pop() ?? "")
+    : null;
+  const isMedia = fileKind === "image" || fileKind === "video" || fileKind === "audio";
+
+  const { data: fileData, isLoading: fileLoading } = useReadFile(
+    { path: selectedFile! },
+    { query: { enabled: !!selectedFile && !isMedia, queryKey: getReadFileQueryKey({ path: selectedFile! }) } }
+  );
+
+  useEffect(() => {
+    if (fileData) { setFileContent(fileData.content); setIsEditing(false); }
+  }, [fileData]);
+
+  useEffect(() => {
+    setSelectedFile(null);
+    // Only close file viewer on navigation — terminal and logs should persist
+    setRightPanel((prev) => (prev === "file" ? null : prev));
+    setIsEditing(false);
+  }, [currentPath]);
+
+  useEffect(() => {
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
+  }, [termHistory]);
+
+  // Focus terminal input when panel opens
+  useEffect(() => {
+    if (rightPanel === "terminal") {
+      setTimeout(() => termInputRef.current?.focus(), 50);
+    }
+  }, [rightPanel]);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const writeMut = useWriteFile({
+    mutation: {
+      onSuccess: (_, vars) => {
+        toast({ title: "Saved" });
+        setIsEditing(false);
+        qc.invalidateQueries({ queryKey: getReadFileQueryKey({ path: vars.data.path }) });
+        qc.invalidateQueries({ queryKey: getListFilesQueryKey({ path: currentPath }) });
+      },
+      onError: (e: any) => toast({ title: "Save failed", description: e?.error, variant: "destructive" }),
+    },
+  });
+
+  const deleteMut = useDeleteFile({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Deleted" });
+        setDeleteTarget(null);
+        if (rightPanel === "file") { setRightPanel(null); setSelectedFile(null); }
+        qc.invalidateQueries({ queryKey: getListFilesQueryKey({ path: currentPath }) });
+      },
+      onError: (e: any) => toast({ title: "Delete failed", description: e?.error, variant: "destructive" }),
+    },
+  });
+
+  const mkdirMut = useCreateDirectory({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Folder created" });
+        setDialogMode(null);
+        qc.invalidateQueries({ queryKey: getListFilesQueryKey({ path: currentPath }) });
+      },
+      onError: (e: any) => toast({ title: "Failed", description: e?.error, variant: "destructive" }),
+    },
+  });
+
+  const newFileMut = useWriteFile({
+    mutation: {
+      onSuccess: (_, vars) => {
+        toast({ title: "File created" });
+        setDialogMode(null);
+        qc.invalidateQueries({ queryKey: getListFilesQueryKey({ path: currentPath }) });
+        openFile(vars.data.path);
+      },
+      onError: (e: any) => toast({ title: "Failed", description: e?.error, variant: "destructive" }),
+    },
+  });
+
+  const renameMut = useRenameFile({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: dialogMode === "move" ? "Moved" : "Renamed" });
+        setDialogMode(null);
+        if (rightPanel === "file") { setRightPanel(null); setSelectedFile(null); }
+        qc.invalidateQueries({ queryKey: getListFilesQueryKey({ path: currentPath }) });
+      },
+      onError: (e: any) => toast({ title: "Failed", description: e?.error, variant: "destructive" }),
+    },
+  });
+
+  const execMut = useExecCommand({
+    mutation: {
+      onSuccess: (result, variables) => {
+        const sentCmd = variables.data.command ?? "";
+        const isCdProbe = /^cd\s.*&&\s*pwd$/.test(sentCmd) || sentCmd === "cd && pwd" || sentCmd === "cd ~ && pwd";
+
+        if (isCdProbe) {
+          if (result.exitCode === 0 && result.stdout.trim()) {
+            const newCwd = result.stdout.trim();
+            setTermCwd(newCwd);
+            setTermHistory((prev) => [...prev, {
+              cmd: termCmd,
+              stdout: "",
+              stderr: stripAnsi(result.stderr),
+              code: 0,
+              cwd: newCwd,
+            }]);
+          } else {
+            setTermHistory((prev) => [...prev, {
+              cmd: termCmd,
+              stdout: "",
+              stderr: stripAnsi(result.stderr) || "cd: No such file or directory",
+              code: result.exitCode,
+            }]);
+          }
+        } else {
+          setTermHistory((prev) => [...prev, {
+            cmd: termCmd || sentCmd,
+            stdout: stripAnsi(result.stdout),
+            stderr: stripAnsi(result.stderr),
+            code: result.exitCode,
+          }]);
+        }
+        setTermCmd("");
+      },
+      onError: (e: any) => toast({ title: "Exec failed", description: e?.error, variant: "destructive" }),
+    },
+  });
+
+  // ── Log tail mutation (separate from terminal execMut) ────────────────────
+
+  const execLogMut = useExecCommand({
+    mutation: {
+      onSuccess: (result) => {
+        const lines = stripAnsi(result.stdout)
+          .split("\n")
+          .filter((l) => l.trim() !== "");
+        setLogLines(lines);
+        setLogLoading(false);
+        setTimeout(() => {
+          if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+        }, 50);
+      },
+      onError: () => setLogLoading(false),
+    },
+  });
+
+  const fetchLogTail = useCallback((file: string) => {
+    execLogMut.mutate({ data: { command: `tail -n 200 "${file}"` } });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Start / stop tailing interval
+  useEffect(() => {
+    if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+    if (logTailing && logActiveFile && rightPanel === "logs") {
+      fetchLogTail(logActiveFile);
+      logIntervalRef.current = setInterval(() => fetchLogTail(logActiveFile), 3000);
+    }
+    return () => { if (logIntervalRef.current) clearInterval(logIntervalRef.current); };
+  }, [logTailing, logActiveFile, rightPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Discover .log files from current listing + logs/ subdirectory + PM2-managed logs
+  useEffect(() => {
+    if (rightPanel !== "logs") return;
+
+    const direct = (listing?.entries ?? [])
+      .filter((e) => e.type === "file" && e.name.endsWith(".log"))
+      .map((e) => e.path);
+
+    const hasLogsDir = (listing?.entries ?? []).some(
+      (e) => e.type === "directory" && e.name === "logs"
+    );
+
+    const authToken = sessionStorage.getItem("xcm_api_key");
+    const authHeader: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
+    const fetchPm2Logs = (): Promise<string[]> =>
+      fetch(`/api/system/pm2/by-cwd?path=${encodeURIComponent(currentPath)}`, { headers: authHeader })
+        .then((r) => r.ok ? r.json() : null)
+        .then((data: { process?: { out?: string | null; err?: string | null } } | null) => {
+          if (!data?.process) return [];
+          return [data.process.out, data.process.err].filter((p): p is string => !!p);
+        })
+        .catch(() => []);
+
+    const fetchSubLogs = (): Promise<string[]> =>
+      hasLogsDir
+        ? fetch(`/api/files/list?path=${encodeURIComponent(currentPath + "/logs")}`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((data) => (data?.entries ?? [])
+              .filter((e: { type: string; name: string }) => e.type === "file" && e.name.endsWith(".log"))
+              .map((e: { path: string }) => e.path))
+            .catch(() => [])
+        : Promise.resolve([]);
+
+    Promise.all([fetchSubLogs(), fetchPm2Logs()]).then(([sub, pm2]) => {
+      // Merge: local files first, then PM2 log files (deduped)
+      const all = [...direct, ...sub];
+      for (const p of pm2) {
+        if (!all.includes(p)) all.push(p);
+      }
+      setLogSubFiles(all);
+      if (!logActiveFile && all.length > 0) {
+        setLogActiveFile(all[0]);
+        setLogLoading(true);
+        fetchLogTail(all[0]);
+      }
+    });
+  }, [rightPanel, listing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const goTo = (p: string) => navigate(`/files?path=${encodeURIComponent(p)}`);
+
+  const openFile = (path: string) => {
+    setSelectedFile(path);
+    setRightPanel("file");
+    setDrawerOpen(false);
+  };
+
+  const openTerminal = () => {
+    const cwd = currentPath;
+    setTermCwd(cwd);
+    setRightPanel("terminal");
+    setDrawerOpen(false);
+    setTimeout(() => {
+      execMut.mutate({ data: { command: "ls", cwd } });
+    }, 80);
+  };
+
+  const openLogs = () => {
+    setLogActiveFile(null);
+    setLogLines([]);
+    setLogSubFiles([]);
+    setLogTailing(true);
+    setRightPanel("logs");
+    setDrawerOpen(false);
+  };
+
+  const closeRightPanel = () => {
+    setRightPanel(null);
+    setSelectedFile(null);
+    setIsEditing(false);
+    if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+  };
+
+  const openDialog = (mode: DialogMode, item?: { path: string; type: FileType }) => {
+    setDialogMode(mode);
+    setActionTarget(item ?? null);
+    setDialogInput(
+      mode === "rename" && item ? (item.path.split("/").pop() ?? "") :
+      mode === "move" && item ? item.path : ""
+    );
+  };
+
+  const submitDialog = () => {
+    if (!dialogInput.trim()) return;
+    if (dialogMode === "mkdir") {
+      mkdirMut.mutate({ data: { path: currentPath === "/" ? `/${dialogInput}` : `${currentPath}/${dialogInput}` } });
+    } else if (dialogMode === "newfile") {
+      newFileMut.mutate({ data: { path: currentPath === "/" ? `/${dialogInput}` : `${currentPath}/${dialogInput}`, content: "" } });
+    } else if (dialogMode === "rename" && actionTarget) {
+      const parent = actionTarget.path.substring(0, actionTarget.path.lastIndexOf("/")) || "";
+      renameMut.mutate({ data: { oldPath: actionTarget.path, newPath: `${parent}/${dialogInput}` } });
+    } else if (dialogMode === "move" && actionTarget) {
+      renameMut.mutate({ data: { oldPath: actionTarget.path, newPath: dialogInput } });
+    }
+  };
+
+  // Resolve a file path arg relative to cwd (handles ~, absolute, relative)
+  const resolvePath = (arg: string, cwd: string): string => {
+    const clean = arg.trim().replace(/^~/, "/root");
+    if (clean.startsWith("/")) return clean;
+    const base = cwd.endsWith("/") ? cwd : cwd + "/";
+    return base + clean;
+  };
+
+  const runCommand = () => {
+    const cmd = termCmd.trim();
+    if (!cmd || execMut.isPending) return;
+    if (cmd === "clear") { setTermHistory([]); setTermCmd(""); return; }
+
+    // Intercept editor commands → open in built-in file editor
+    const editorMatch = cmd.match(/^(nano|vim?|gedit|pico|emacs)\s+(.+)$/);
+    if (editorMatch) {
+      const filePath = resolvePath(editorMatch[2], termCwd);
+      setTermHistory((prev) => [...prev, {
+        cmd,
+        stdout: `Opening ${filePath} in built-in editor…`,
+        stderr: "",
+        code: 0,
+      }]);
+      setTermCmd("");
+      openFile(filePath);
+      return;
+    }
+
+    // Intercept other interactive / TUI commands that can't work without a PTY
+    const interactiveMatch = cmd.match(/^(htop|top|less|more|man|watch|mc|lynx|mutt|alpine|journalctl\s+-f|tail\s+-f)\b/);
+    if (interactiveMatch) {
+      setTermHistory((prev) => [...prev, {
+        cmd,
+        stdout: "",
+        stderr: `"${interactiveMatch[1]}" requires an interactive terminal (PTY) and is not supported here.\nTip: use the Logs panel for live log tailing, or run a non-interactive alternative.`,
+        code: 1,
+      }]);
+      setTermCmd("");
+      return;
+    }
+
+    // Handle cd client-side to persist working directory
+    const cdMatch = cmd.match(/^cd(?:\s+(.+))?$/);
+    if (cdMatch) {
+      const arg = (cdMatch[1] ?? "").trim();
+      // Verify the path exists by running `cd` on the server, then update state
+      execMut.mutate({
+        data: {
+          command: `cd ${arg || "~"} && pwd`,
+          cwd: termCwd,
+        },
+      });
+      return;
+    }
+
+    execMut.mutate({ data: { command: cmd, cwd: termCwd } });
+  };
+
+  const copyText = (text: string, id: number | "all") => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(id);
+      setTimeout(() => setCopiedIdx(null), 2000);
+    });
+  };
+
+  const copyFileContent = () => {
+    if (!fileContent) return;
+    navigator.clipboard.writeText(fileContent).then(() => {
+      setCopiedFile(true);
+      setTimeout(() => setCopiedFile(false), 2000);
+    });
+  };
+
+  const buildBlockText = (e: typeof termHistory[0]) =>
+    `$ ${e.cmd}\n${e.stdout}${e.stderr}`.trimEnd();
+
+  const buildAllText = () => termHistory.map(buildBlockText).join("\n\n");
+
+  // ── Computed ──────────────────────────────────────────────────────────────
+
+  const crumbs = currentPath.split("/").filter(Boolean);
+  const isPending = mkdirMut.isPending || newFileMut.isPending || renameMut.isPending;
+  const rightPanelOpen = rightPanel !== null;
+
+  // ── File list (reused in main view + drawer) ──────────────────────────────
+
+  const filteredEntries = searchQuery
+    ? (listing?.entries ?? []).filter((e) =>
+        e.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : listing?.entries ?? [];
+
+  const FileList = ({ onNavigate }: { onNavigate?: () => void }) => (
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      {searchQuery && (
+        <div className="px-4 py-2 border-b border-border/30 flex items-center gap-2 bg-primary/5">
+          <Search className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+          <span className="text-xs font-mono text-primary">
+            Showing {filteredEntries.length} result{filteredEntries.length !== 1 ? "s" : ""} for "{searchQuery}"
+          </span>
+          <button
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => navigate(`/files?path=${encodeURIComponent(currentPath)}`) }
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      {isLoading ? (
+        <div className="p-3 space-y-1">
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-11 w-full rounded-md" />)}
+        </div>
+      ) : listError ? (
+        <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground p-4">
+          <AlertTriangle className="w-8 h-8 text-destructive/60" />
+          <p className="font-mono text-sm">Cannot read directory</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+        </div>
+      ) : (
+        <div>
+          {!searchQuery && listing?.parentPath != null && (
+            <div
+              className="flex items-center gap-3 px-4 py-3 hover:bg-accent/40 cursor-pointer border-b border-border/30 transition-colors"
+              onClick={() => { goTo(listing.parentPath!); onNavigate?.(); }}
+            >
+              <ArrowLeft className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <span className="font-mono text-sm text-muted-foreground">..</span>
+            </div>
+          )}
+          {filteredEntries.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+              <Folder className="w-9 h-9 opacity-20" />
+              <p className="text-sm font-mono opacity-50">
+                {searchQuery ? `No matches for "${searchQuery}"` : "Empty folder"}
+              </p>
+            </div>
+          )}
+          {filteredEntries.map((entry) => {
+            const isSelected = selectedFile === entry.path;
+            const entryType = entry.type as FileType;
+            return (
+              <div
+                key={entry.path}
+                className={`group relative flex items-center gap-3 px-4 py-3 border-b border-border/30 cursor-pointer transition-colors select-none ${
+                  isSelected ? "bg-primary/10 border-l-2 border-l-primary" : "hover:bg-accent/40"
+                }`}
+                onClick={() => {
+                  if (entry.type === "directory") { goTo(entry.path); onNavigate?.(); }
+                  else { openFile(entry.path); }
+                }}
+              >
+                <EntryIcon name={entry.name} type={entryType} size={19} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-sm truncate" title={entry.name}>{entry.name}</span>
+                    {entry.type === "symlink" && (
+                      <Badge variant="outline" className="text-[10px] px-1 h-4 py-0 font-mono flex-shrink-0">link</Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground/60">
+                    {entry.type !== "directory" && <span className="font-mono">{formatSize(entry.size)}</span>}
+                    <span>{formatDate(entry.modifiedAt)}</span>
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-8 w-8 opacity-0 group-hover:opacity-100 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {entry.type !== "directory" && (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openFile(entry.path); }}>
+                        <FileText className="w-4 h-4 mr-2" /> Open
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDialog("rename", { path: entry.path, type: entryType }); }}>
+                      <Edit2 className="w-4 h-4 mr-2" /> Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDialog("move", { path: entry.path, type: entryType }); }}>
+                      <MoveRight className="w-4 h-4 mr-2" /> Move
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget({ path: entry.path, type: entryType }); }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col flex-1 min-h-0 bg-background text-foreground overflow-hidden">
+
+      {/* ── Top bar ── */}
+      <header className="flex-shrink-0 h-12 bg-card border-b border-border flex items-center gap-2 px-3">
+
+        {/* File list toggle — only shown when file viewer is open (sidebar is shown for terminal/logs) */}
+        {rightPanel === "file" && (
+          <Button
+            variant="ghost" size="icon"
+            className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={() => setDrawerOpen(true)}
+            title="Browse files"
+          >
+            <PanelLeft className="w-4 h-4" />
+          </Button>
+        )}
+
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto scrollbar-none font-mono text-sm">
+          <Button
+            variant="ghost" size="sm"
+            className="h-7 px-2 flex-shrink-0 text-muted-foreground hover:text-primary"
+            onClick={() => goTo("/")}
+          >
+            <HardDrive className="w-3.5 h-3.5" />
+          </Button>
+          {crumbs.map((crumb, idx) => {
+            const p = "/" + crumbs.slice(0, idx + 1).join("/");
+            const isLast = idx === crumbs.length - 1;
+            return (
+              <div key={p} className="flex items-center flex-shrink-0">
+                <ChevronRight className="w-3 h-3 text-muted-foreground/30" />
+                <Button
+                  variant="ghost" size="sm"
+                  className={`h-7 px-1.5 font-mono text-sm ${isLast ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => goTo(p)}
+                >
+                  {crumb}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right toolbar */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!rightPanelOpen && listing?.parentPath != null && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => goTo(listing.parentPath!)} title="Go up">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          )}
+          {!rightPanelOpen && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()} title="Refresh">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          )}
+
+          {/* Logs toggle */}
+          <Button
+            variant={rightPanel === "logs" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 gap-1.5 font-mono text-xs"
+            onClick={() => rightPanel === "logs" ? closeRightPanel() : openLogs()}
+            title="Live Logs"
+          >
+            <ScrollText className="w-3.5 h-3.5" />
+            Logs
+          </Button>
+
+          {/* Terminal toggle */}
+          <Button
+            variant={rightPanel === "terminal" ? "secondary" : "ghost"}
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => rightPanel === "terminal" ? closeRightPanel() : openTerminal()}
+            title="Terminal"
+          >
+            <Terminal className="w-4 h-4" />
+          </Button>
+
+          {/* New dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="default" size="sm" className="h-8 font-mono text-xs gap-1.5">
+                New <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openDialog("newfile")}>
+                <FilePlus className="w-4 h-4 mr-2" /> New File
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openDialog("mkdir")}>
+                <FolderPlus className="w-4 h-4 mr-2" /> New Folder
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {/* ── Main ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* File list — full width when no panel; sidebar when terminal/logs open */}
+        {(rightPanel === null || rightPanel === "terminal" || rightPanel === "logs") && (
+          <div className={`flex flex-col min-h-0 overflow-hidden border-r border-border ${
+            rightPanelOpen ? "w-64 flex-shrink-0" : "flex-1"
+          }`}>
+            {/* Column headers — only when full width */}
+            {!rightPanelOpen && (
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/20 border-b border-border font-mono text-xs text-muted-foreground font-medium flex-shrink-0 select-none">
+                <div className="col-span-7">Name</div>
+                <div className="col-span-2 text-right hidden sm:block">Size</div>
+                <div className="col-span-3 text-right hidden sm:block">Modified</div>
+              </div>
+            )}
+            <FileList />
+            <div className="h-7 border-t border-border bg-card/20 flex items-center px-4 flex-shrink-0">
+              <span className="font-mono text-xs text-muted-foreground/50">{filteredEntries.length} items</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── File viewer / editor ── */}
+        {rightPanel === "file" && selectedFile && (
+          <div className="flex-1 flex flex-col min-h-0 bg-[#09090b]">
+            {/* Header */}
+            <div className="h-12 border-b border-border bg-card/40 flex items-center justify-between px-4 flex-shrink-0 gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {fileKind === "image"  && <ImageIcon className="w-4 h-4 text-lime-400 flex-shrink-0" />}
+                {fileKind === "video"  && <Video     className="w-4 h-4 text-cyan-400   flex-shrink-0" />}
+                {fileKind === "audio"  && <Music     className="w-4 h-4 text-green-400  flex-shrink-0" />}
+                {fileKind === "code"   && <Code2     className="w-4 h-4 text-blue-400   flex-shrink-0" />}
+                {fileKind === "text"   && <FileText  className="w-4 h-4 text-primary    flex-shrink-0" />}
+                {fileKind === null     && <FileIcon  className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                <span className="font-mono text-sm truncate text-primary" title={selectedFile}>
+                  {selectedFile.split("/").pop()}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="outline" size="sm" className="h-7 font-mono text-xs"
+                      onClick={() => { setIsEditing(false); setFileContent(fileData?.content ?? ""); }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm" className="h-7 font-mono text-xs"
+                      onClick={() => writeMut.mutate({ data: { path: selectedFile, content: fileContent } })}
+                      disabled={writeMut.isPending}
+                    >
+                      <Save className="w-3 h-3 mr-1.5" />
+                      {writeMut.isPending ? "Saving…" : "Save"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {!isMedia && !fileData?.isBinary && fileContent && (
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-7 px-2 font-mono text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                        onClick={copyFileContent}
+                        title="Copy all"
+                      >
+                        {copiedFile
+                          ? <><Check className="w-3 h-3 text-green-400" /> Copied</>
+                          : <><Copy className="w-3 h-3" /> Copy all</>}
+                      </Button>
+                    )}
+                    {!isMedia && !fileData?.isBinary && (
+                      <Button variant="outline" size="sm" className="h-7 font-mono text-xs" onClick={() => setIsEditing(true)}>
+                        <Edit2 className="w-3 h-3 mr-1.5" /> Edit
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={closeRightPanel}>
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              {/* Image viewer */}
+              {fileKind === "image" && (
+                <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-[#09090b]">
+                  <img
+                    src={rawUrl(selectedFile)}
+                    alt={selectedFile.split("/").pop()}
+                    className="max-w-full max-h-full object-contain rounded shadow-lg"
+                    style={{ imageRendering: "auto" }}
+                  />
+                </div>
+              )}
+
+              {/* Video player */}
+              {fileKind === "video" && (
+                <div className="flex-1 flex items-center justify-center p-4 bg-black overflow-hidden">
+                  <video
+                    key={selectedFile}
+                    src={rawUrl(selectedFile)}
+                    controls
+                    className="max-w-full max-h-full rounded shadow-lg"
+                    style={{ maxHeight: "calc(100vh - 140px)" }}
+                  />
+                </div>
+              )}
+
+              {/* Audio player */}
+              {fileKind === "audio" && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8 bg-[#09090b]">
+                  <Music className="w-20 h-20 text-green-400/30" />
+                  <p className="font-mono text-sm text-muted-foreground truncate max-w-xs text-center">
+                    {selectedFile.split("/").pop()}
+                  </p>
+                  <audio
+                    key={selectedFile}
+                    src={rawUrl(selectedFile)}
+                    controls
+                    className="w-full max-w-md"
+                  />
+                </div>
+              )}
+
+              {/* Text / code viewer (non-media) */}
+              {!isMedia && (
+                <>
+                  {fileLoading ? (
+                    <div className="flex items-center justify-center h-full gap-3 text-muted-foreground">
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <span className="font-mono text-sm">Loading…</span>
+                    </div>
+                  ) : fileData?.isBinary ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+                      <FileIcon className="w-14 h-14 opacity-10" />
+                      <p className="font-mono text-sm">Binary file — cannot display</p>
+                      <p className="text-xs opacity-50 font-mono">{formatSize(fileData.size)}</p>
+                    </div>
+                  ) : isEditing ? (
+                    <Textarea
+                      value={fileContent}
+                      onChange={(e) => setFileContent(e.target.value)}
+                      className="flex-1 h-full font-mono text-sm bg-transparent border-0 rounded-none resize-none focus-visible:ring-0 p-4 leading-relaxed"
+                      spellCheck={false}
+                    />
+                  ) : fileKind === "code" && fileContent ? (
+                    <div className="flex-1 min-h-0 overflow-y-auto">
+                      <SyntaxHighlighter
+                        language={EXT_LANG[selectedFile.split(".").pop()?.toLowerCase() ?? ""] ?? "plaintext"}
+                        style={atomOneDark}
+                        customStyle={{
+                          margin: 0,
+                          padding: "1rem",
+                          background: "transparent",
+                          fontSize: "0.75rem",
+                          lineHeight: "1.6",
+                        }}
+                        wrapLongLines={true}
+                        showLineNumbers={true}
+                        lineNumberStyle={{ color: "#4b5563", minWidth: "2.5em", paddingRight: "1em", userSelect: "none" }}
+                      >
+                        {fileContent}
+                      </SyntaxHighlighter>
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-h-0 overflow-y-auto">
+                      {fileContent ? (
+                        <pre className="p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-muted-foreground">
+                          {fileContent}
+                        </pre>
+                      ) : (
+                        <div className="p-4 font-mono text-xs text-muted-foreground/30 italic">Empty file</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Terminal (inline panel) ── */}
+        {rightPanel === "terminal" && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Terminal header */}
+            <div className="h-12 border-b border-border bg-card/40 flex items-center justify-between px-4 flex-shrink-0 gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Terminal className="w-4 h-4 text-primary flex-shrink-0" />
+                <span className="font-mono text-sm text-primary flex-shrink-0">Terminal</span>
+                <span className="font-mono text-xs text-muted-foreground/60 ml-1 truncate">{termCwd}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {termHistory.length > 0 && (
+                  <>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-7 px-2 font-mono text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                      onClick={() => copyText(buildAllText(), "all")}
+                    >
+                      {copiedIdx === "all"
+                        ? <><Check className="w-3.5 h-3.5 text-green-400" /> Copied</>
+                        : <><Copy className="w-3.5 h-3.5" /> Copy all</>}
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => setTermHistory([])}
+                      title="Clear"
+                    >
+                      <Eraser className="w-3.5 h-3.5" />
+                    </Button>
+                  </>
+                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={closeRightPanel}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Output */}
+            <div ref={termRef} className="flex-1 min-h-0 overflow-y-auto bg-black p-4 font-mono text-xs leading-relaxed">
+              {termHistory.length === 0 && (
+                <div className="text-muted-foreground/30 italic">Type a command below…</div>
+              )}
+              {termHistory.map((entry, i) => (
+                <div key={i} className="mb-4 group">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-primary/70 font-mono">$ {entry.cmd}</div>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                      onClick={() => copyText(buildBlockText(entry), i)}
+                    >
+                      {copiedIdx === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  {entry.cwd && (
+                    <div className="text-cyan-400/70 text-[11px] mt-0.5 font-mono">→ {entry.cwd}</div>
+                  )}
+                  {entry.stdout && <pre className="text-green-300/80 whitespace-pre-wrap break-all mt-0.5">{entry.stdout}</pre>}
+                  {entry.stderr && <pre className="text-red-400/80 whitespace-pre-wrap break-all mt-0.5">{entry.stderr}</pre>}
+                  {entry.code !== 0 && <div className="text-red-500/60 text-[10px] mt-0.5">exit: {entry.code}</div>}
+                </div>
+              ))}
+            </div>
+
+            {/* Input */}
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-border flex-shrink-0 bg-black">
+              <span className="font-mono text-sm text-primary/60 flex-shrink-0">$</span>
+              <Input
+                ref={termInputRef}
+                value={termCmd}
+                onChange={(e) => setTermCmd(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") runCommand(); }}
+                onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 150)}
+                placeholder="command…"
+                className="flex-1 font-mono text-sm bg-transparent border-0 focus-visible:ring-0 px-0 h-8"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                inputMode="text"
+              />
+              <Button size="sm" className="h-8 px-3 flex-shrink-0" onClick={runCommand} disabled={!termCmd.trim() || execMut.isPending}>
+                <Play className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Logs panel ── */}
+        {rightPanel === "logs" && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Header */}
+            <div className="h-12 border-b border-border bg-card/40 flex items-center justify-between px-4 flex-shrink-0 gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <ScrollText className="w-4 h-4 text-primary flex-shrink-0" />
+                <span className="font-mono text-sm text-primary flex-shrink-0">Logs</span>
+                {logActiveFile && (
+                  <span className="font-mono text-xs text-muted-foreground/60 ml-1 truncate">
+                    {logActiveFile.split("/").pop()}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {logLines.length > 0 && (
+                  <Button
+                    variant="ghost" size="sm"
+                    className="h-7 px-2 font-mono text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                    onClick={() => {
+                      navigator.clipboard.writeText(logLines.join("\n")).then(() => {
+                        setLogCopied(true);
+                        setTimeout(() => setLogCopied(false), 2000);
+                      });
+                    }}
+                  >
+                    {logCopied
+                      ? <><Check className="w-3.5 h-3.5 text-green-400" /> Copied</>
+                      : <><Copy className="w-3.5 h-3.5" /> Copy all</>}
+                  </Button>
+                )}
+                <button
+                  onClick={() => setLogTailing((v) => !v)}
+                  className="h-7 px-2.5 rounded text-xs font-medium transition-colors font-mono flex items-center gap-1.5"
+                  style={{
+                    background: logTailing ? "rgba(255,255,255,.1)" : "transparent",
+                    color: logTailing ? "#ffd1c2" : "var(--muted-foreground)",
+                    border: `1px solid ${logTailing ? "rgba(255,255,255,.3)" : "rgba(255,255,255,.08)"}`,
+                  }}
+                >
+                  {logTailing
+                    ? <><Activity className="w-3 h-3" /> Live</>
+                    : <><WifiOff className="w-3 h-3" /> Paused</>}
+                </button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={closeRightPanel}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {/* File picker sidebar */}
+              {logSubFiles.length > 1 && (
+                <div className="w-48 flex-shrink-0 border-r border-border bg-card/20 overflow-y-auto">
+                  <div className="px-3 py-2 border-b border-border/50">
+                    <span className="font-mono text-[10px] text-muted-foreground/50 uppercase tracking-wider">Log files</span>
+                  </div>
+                  {logSubFiles.map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => {
+                        setLogActiveFile(f);
+                        setLogLines([]);
+                        setLogLoading(true);
+                        fetchLogTail(f);
+                      }}
+                      className={`w-full text-left px-3 py-2.5 font-mono text-xs transition-colors truncate border-b border-border/20 flex items-center gap-2 ${
+                        logActiveFile === f
+                          ? "bg-primary/10 text-primary border-l-2 border-l-primary"
+                          : "text-muted-foreground hover:bg-accent/40"
+                      }`}
+                      title={f}
+                    >
+                      <FileText className="w-3 h-3 flex-shrink-0 opacity-60" />
+                      <span className="truncate">{f.split("/").pop()}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Log output */}
+              <div
+                ref={logRef}
+                className="flex-1 min-h-0 overflow-y-auto bg-black font-mono text-xs leading-relaxed p-4"
+              >
+                {logLoading && logLines.length === 0 ? (
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Loading…</span>
+                  </div>
+                ) : logLines.length === 0 && !logActiveFile ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground/40">
+                    <ScrollText className="w-14 h-14 opacity-20" />
+                    <p className="text-sm">No .log files found in this directory</p>
+                    <p className="text-xs opacity-60">Try navigating to a directory that contains .log files or a logs/ folder</p>
+                  </div>
+                ) : logLines.length === 0 ? (
+                  <div className="text-muted-foreground/30 italic">Log file is empty</div>
+                ) : (
+                  logLines.map((line, i) => {
+                    const isErr = /\b(error|err|fatal|exception|fail|WARN|WARNING)\b/i.test(line);
+                    const isInfo = /\b(info|INFO|log|LOG)\b/.test(line);
+                    return (
+                      <div key={i} className="flex gap-2 group hover:bg-white/[0.02] px-1 rounded leading-5 mb-0.5">
+                        <span className="text-muted-foreground/25 select-none w-6 text-right flex-shrink-0">{i + 1}</span>
+                        <span
+                          className="break-all whitespace-pre-wrap"
+                          style={{
+                            color: isErr ? "#ff8a80" : isInfo ? "#a8d8ff" : "rgba(255,255,255,.72)",
+                          }}
+                        >
+                          {line}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── File list drawer (when right panel is active) ── */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="left" className="w-80 p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b border-border flex-shrink-0">
+            <SheetTitle className="font-mono flex items-center gap-2 text-sm">
+              <FolderOpen className="w-4 h-4 text-primary" />
+              {currentPath}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 flex flex-col">
+            <FileList onNavigate={() => setDrawerOpen(false)} />
+          </div>
+          <div className="h-7 border-t border-border bg-card/20 flex items-center justify-between px-4 flex-shrink-0">
+            <span className="font-mono text-xs text-muted-foreground/50">{filteredEntries.length} items</span>
+            <Button variant="ghost" size="sm" className="h-6 px-2 font-mono text-xs" onClick={() => { refetch(); }}>
+              <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Create / Rename / Move dialog ── */}
+      <Dialog open={!!dialogMode} onOpenChange={(open) => !open && setDialogMode(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono">
+              {dialogMode === "mkdir" ? "New Folder" :
+               dialogMode === "newfile" ? "New File" :
+               dialogMode === "rename" ? "Rename" : "Move To"}
+            </DialogTitle>
+            {(dialogMode === "rename" || dialogMode === "move") && actionTarget && (
+              <DialogDescription className="font-mono text-xs break-all">{actionTarget.path}</DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <Input
+              value={dialogInput}
+              onChange={(e) => setDialogInput(e.target.value)}
+              placeholder={
+                dialogMode === "mkdir" ? "folder-name" :
+                dialogMode === "newfile" ? "filename.txt" :
+                dialogMode === "rename" ? "new-name" : "/absolute/destination/path"
+              }
+              className="font-mono text-sm"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter" && dialogInput.trim()) submitDialog(); }}
+            />
+            {dialogMode === "move" && (
+              <p className="text-xs text-muted-foreground font-mono">Enter the full absolute destination path</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogMode(null)}>Cancel</Button>
+            <Button onClick={submitDialog} disabled={!dialogInput.trim() || isPending}>
+              {isPending ? "Working…" : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete confirmation ── */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-mono flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive" /> Confirm Delete
+            </AlertDialogTitle>
+            <AlertDialogDescription className="font-mono text-sm break-all">
+              Delete <span className="text-foreground font-medium">{deleteTarget?.path}</span>?
+              {deleteTarget?.type === "directory" && (
+                <span className="block mt-1 text-destructive text-xs">This recursively deletes all contents.</span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-mono"
+              onClick={() => {
+                if (deleteTarget) {
+                  deleteMut.mutate({ params: { path: deleteTarget.path, recursive: deleteTarget.type === "directory" } });
+                }
+              }}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
