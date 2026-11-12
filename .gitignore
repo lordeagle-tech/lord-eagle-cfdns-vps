@@ -11,6 +11,20 @@ out-tsc
 # dependencies
 node_modules
 
+# deployment secrets and generated backup material
+.env
+.env.*
+!.env.example
+.xcm_key
+.xcm_key.tmp-*
+*.pem
+*.key
+*.ppk
+*.secrets.tar.gz
+*.sql.gz
+/cfdns-manager-credentials.txt
+/backups/
+
 # IDEs and editors
 /.idea
 .project

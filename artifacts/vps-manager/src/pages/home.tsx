@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Footer } from "@/components/footer";
-import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,7 +75,7 @@ function StatCard({
   value,
   sub,
   progress,
-  color = "#ff5a1f",
+  color = "#e6ad68",
 }: {
   icon: React.ElementType;
   label: string;
@@ -88,7 +87,7 @@ function StatCard({
   return (
     <div
       className="ops-panel rounded-2xl p-5"
-      style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}
+      style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}
     >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</span>
@@ -109,7 +108,7 @@ function StatCard({
               width: `${Math.min(100, progress)}%`,
               background: progress > 80
                 ? "linear-gradient(90deg,#ff6b6b,#ff4757)"
-                : "linear-gradient(90deg,#ff5a1f,#ffd1c2)",
+                : "linear-gradient(90deg,#e6ad68,#f0c58f)",
             }}
           />
         </div>
@@ -119,7 +118,6 @@ function StatCard({
 }
 
 export default function HomePage() {
-  const { apiKey } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [info, setInfo] = useState<SystemInfo | null>(null);
@@ -136,10 +134,10 @@ export default function HomePage() {
   const [pullStates, setPullStates] = useState<Record<string, "idle" | "loading" | "ok" | "error">>({});
   const [pullOutputs, setPullOutputs] = useState<Record<string, string>>({});
   const [sitesLoading, setSitesLoading] = useState(true);
-  const [githubSsh, setGithubSsh] = useState<{ connected: boolean; authUser: string | null; keys: { type: string }[] } | null>(null);
+  const [githubSsh, setGithubSsh] = useState<{ enabled: boolean; configured: boolean; tested: boolean; connected: boolean; authUser: string | null; keys: { type: string }[] } | null>(null);
   const [githubSshLoading, setGithubSshLoading] = useState(true);
 
-  const authHeaders: Record<string, string> = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+  const authHeaders: Record<string, string> = {};
 
   const fetchInfo = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
@@ -149,7 +147,7 @@ export default function HomePage() {
     } catch { /* ignore */ }
     setLoading(false);
     setRefreshing(false);
-  }, [apiKey]);
+  }, []);
 
   const fetchPm2 = useCallback(async () => {
     try {
@@ -161,7 +159,7 @@ export default function HomePage() {
       }
     } catch { /* ignore */ }
     setPm2Loading(false);
-  }, [apiKey]);
+  }, []);
 
   const fetchGit = useCallback(async () => {
     try {
@@ -172,7 +170,7 @@ export default function HomePage() {
       }
     } catch { /* ignore */ }
     setGitLoading(false);
-  }, [apiKey]);
+  }, []);
 
   const fetchSites = useCallback(async () => {
     try {
@@ -183,7 +181,7 @@ export default function HomePage() {
       }
     } catch { /* ignore */ }
     setSitesLoading(false);
-  }, [apiKey]);
+  }, []);
 
   const gitPull = useCallback(async (domain: string, dir: string) => {
     setPullStates((prev) => ({ ...prev, [domain]: "loading" }));
@@ -203,18 +201,18 @@ export default function HomePage() {
       setPullStates((prev) => ({ ...prev, [domain]: "error" }));
       setPullOutputs((prev) => ({ ...prev, [domain]: String(e) }));
     }
-  }, [apiKey]);
+  }, []);
 
   const fetchGithubSsh = useCallback(async () => {
     try {
-      const res = await fetch("/api/system/github-ssh", { headers: authHeaders });
+      const res = await fetch("/api/github/ssh-key", { headers: authHeaders });
       if (res.ok) {
-        const data = await res.json() as { connected: boolean; authUser: string | null; keys: { type: string }[] };
+        const data = await res.json() as { enabled: boolean; configured: boolean; tested: boolean; connected: boolean; authUser: string | null; keys: { type: string }[] };
         setGithubSsh(data);
       }
     } catch { /* ignore */ }
     setGithubSshLoading(false);
-  }, [apiKey]);
+  }, []);
 
   useEffect(() => {
     fetchInfo(false);
@@ -254,12 +252,12 @@ export default function HomePage() {
   const cpuLoad = info ? parseFloat(info.cpu.loadAvg["1m"]) / info.cpu.cores * 100 : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto" style={{ background: "#0b0b0c" }}>
+    <div className="flex-1 overflow-y-auto" style={{ background: "#0e1012" }}>
       {/* Hero / quick actions */}
       <div
         className="relative overflow-hidden px-6 py-8"
         style={{
-          background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,90,31,.12) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(230,173,104,.12) 0%, transparent 70%)",
         }}
       >
         <div className="loop-network-visual" aria-hidden="true">
@@ -332,7 +330,7 @@ export default function HomePage() {
                 onClick={clearCache}
                 disabled={clearing}
                 className="h-9 gap-1.5 text-xs"
-                style={{ background: "rgba(255,90,31,.2)", color: "#ff5a1f", border: "1px solid rgba(255,90,31,.4)" }}
+                style={{ background: "rgba(230,173,104,.2)", color: "#e6ad68", border: "1px solid rgba(230,173,104,.4)" }}
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 {clearing ? "Clearing…" : "Clear Cache"}
@@ -342,7 +340,7 @@ export default function HomePage() {
 
           {/* Search bar */}
           <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
-            <Activity className="w-3.5 h-3.5" style={{ color: "#ffd1c2" }} />
+            <Activity className="w-3.5 h-3.5" style={{ color: "#f0c58f" }} />
             <span>Monitor the machine, ship changes, and keep every service accountable.</span>
           </div>
           <form onSubmit={handleSearch} className="flex gap-2 max-w-xl mb-2">
@@ -353,14 +351,14 @@ export default function HomePage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search files…"
                 className="pl-10 h-10 font-mono text-sm"
-                style={{ background: "#111113", borderColor: "rgba(255,90,31,.28)" }}
+                style={{ background: "#15181b", borderColor: "rgba(230,173,104,.28)" }}
               />
             </div>
             <Button
               type="submit"
               disabled={!searchQuery.trim()}
               className="h-10 px-5 text-sm font-medium"
-              style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c", border: "none" }}
+              style={{ background: "linear-gradient(135deg,#e6ad68,#f0c58f)", color: "#0e1012", border: "none" }}
             >
               Search
             </Button>
@@ -382,7 +380,7 @@ export default function HomePage() {
               value={`${Math.min(100, cpuLoad).toFixed(1)}%`}
               sub={`${info?.cpu.model ?? "—"} · ${info?.cpu.cores} cores · avg ${info?.cpu.loadAvg["1m"]} / ${info?.cpu.loadAvg["5m"]} / ${info?.cpu.loadAvg["15m"]}`}
               progress={cpuLoad}
-              color="#ff5a1f"
+              color="#e6ad68"
             />
             <StatCard
               icon={MemoryStick}
@@ -390,7 +388,7 @@ export default function HomePage() {
               value={`${info?.memory.usagePercent ?? 0}%`}
               sub={`${fmtBytes(info?.memory.used ?? 0)} used · ${fmtBytes(info?.memory.free ?? 0)} free / ${fmtBytes(info?.memory.total ?? 0)}`}
               progress={memPct}
-              color="#ffd1c2"
+              color="#f0c58f"
             />
             <StatCard
               icon={HardDrive}
@@ -398,14 +396,14 @@ export default function HomePage() {
               value={mainDisk?.usePercent ?? "—"}
               sub={`${mainDisk?.used ?? "?"} / ${mainDisk?.size ?? "?"} used`}
               progress={diskPct}
-              color="#ff5a1f"
+              color="#e6ad68"
             />
             <StatCard
               icon={Activity}
               label="Uptime"
               value={info?.uptime ?? "—"}
               sub={`Kernel ${info?.kernel ?? "—"}`}
-              color="#ffd1c2"
+              color="#f0c58f"
             />
           </div>
         )}
@@ -415,17 +413,23 @@ export default function HomePage() {
           <div
             className="flex items-center gap-3 px-4 py-3 rounded-xl"
             style={{
-              background: githubSsh.connected ? "rgba(255,255,255,.06)" : "rgba(255,107,107,.06)",
-              border: `1px solid ${githubSsh.connected ? "rgba(255,255,255,.2)" : "rgba(255,107,107,.2)"}`,
+              background: githubSsh.connected ? "rgba(255,255,255,.06)" : "rgba(255,177,92,.06)",
+              border: `1px solid ${githubSsh.connected ? "rgba(255,255,255,.2)" : "rgba(255,177,92,.2)"}`,
             }}
           >
             {githubSsh.connected
-              ? <ShieldCheck className="w-4 h-4 flex-shrink-0" style={{ color: "#ffd1c2" }} />
-              : <ShieldX className="w-4 h-4 flex-shrink-0" style={{ color: "#ff6b6b" }} />
+              ? <ShieldCheck className="w-4 h-4 flex-shrink-0" style={{ color: "#f0c58f" }} />
+              : <ShieldX className="w-4 h-4 flex-shrink-0" style={{ color: "#ffb15c" }} />
             }
             <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
-              <span className="text-sm font-semibold" style={{ color: githubSsh.connected ? "#ffd1c2" : "#ff6b6b" }}>
-                {githubSsh.connected ? "GitHub SSH: Connected" : "GitHub SSH: Not connected"}
+              <span className="text-sm font-semibold" style={{ color: githubSsh.connected ? "#f0c58f" : "#ffb15c" }}>
+                {githubSsh.connected
+                  ? "GitHub SSH: Connected"
+                  : !githubSsh.enabled
+                    ? "GitHub SSH: available after self-host installation"
+                    : githubSsh.configured
+                      ? "GitHub SSH: key ready; add it and test"
+                      : "GitHub SSH: setup needed"}
               </span>
               {githubSsh.connected && githubSsh.authUser && (
                 <span className="text-xs text-muted-foreground">
@@ -448,7 +452,7 @@ export default function HomePage() {
             {/* System info */}
             <div
               className="ops-panel rounded-2xl p-5"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}
             >
               <div className="flex items-center gap-2 mb-4">
                 <Server className="w-4 h-4 text-lime-400" />
@@ -473,10 +477,10 @@ export default function HomePage() {
             {/* Disk mounts */}
             <div
               className="ops-panel rounded-2xl p-5"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}
             >
               <div className="flex items-center gap-2 mb-4">
-                <HardDrive className="w-4 h-4" style={{ color: "#ffd1c2" }} />
+                <HardDrive className="w-4 h-4" style={{ color: "#f0c58f" }} />
                 <h2 className="text-sm font-bold text-foreground">Disk Mounts</h2>
               </div>
               <div className="space-y-3">
@@ -495,7 +499,7 @@ export default function HomePage() {
                             width: `${Math.min(100, pct)}%`,
                             background: pct > 80
                               ? "linear-gradient(90deg,#ff6b6b,#ff4757)"
-                              : "linear-gradient(90deg,#ff5a1f,#ffd1c2)",
+                              : "linear-gradient(90deg,#e6ad68,#f0c58f)",
                           }}
                         />
                       </div>
@@ -510,7 +514,7 @@ export default function HomePage() {
             <div className="space-y-4">
               <div
                 className="ops-panel rounded-2xl p-5"
-                style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}
+                style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}
               >
                 <div className="flex items-center gap-2 mb-3">
                   <Network className="w-4 h-4 text-lime-400" />
@@ -531,10 +535,10 @@ export default function HomePage() {
 
               <div
                 className="ops-panel rounded-2xl p-5"
-                style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}
+                style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <Users className="w-4 h-4" style={{ color: "#ffd1c2" }} />
+                  <Users className="w-4 h-4" style={{ color: "#f0c58f" }} />
                   <h2 className="text-sm font-bold text-foreground">Logged Users</h2>
                 </div>
                 {info.loggedUsers.length === 0 ? (
@@ -545,7 +549,7 @@ export default function HomePage() {
                       <span
                         key={u}
                         className="text-xs font-mono px-2 py-0.5 rounded"
-                        style={{ background: "rgba(255,90,31,.15)", color: "#ff5a1f" }}
+                        style={{ background: "rgba(230,173,104,.15)", color: "#e6ad68" }}
                       >
                         {u}
                       </span>
@@ -560,11 +564,11 @@ export default function HomePage() {
         {/* PM2 Processes */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <Layers className="w-4 h-4" style={{ color: "#ffd1c2" }} />
+            <Layers className="w-4 h-4" style={{ color: "#f0c58f" }} />
             <h2 className="text-sm font-bold text-foreground">PM2 Processes</h2>
             {!pm2Loading && pm2Available && pm2Processes.length > 0 && (
               <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: "rgba(255,255,255,.12)", color: "#ffd1c2", border: "1px solid rgba(255,255,255,.2)" }}>
+                style={{ background: "rgba(255,255,255,.12)", color: "#f0c58f", border: "1px solid rgba(255,255,255,.2)" }}>
                 {pm2Processes.length} process{pm2Processes.length !== 1 ? "es" : ""}
               </span>
             )}
@@ -576,14 +580,14 @@ export default function HomePage() {
             </div>
           ) : !pm2Available ? (
             <div className="rounded-xl p-5 flex items-center gap-3"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.15)" }}>
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.15)" }}>
               <AlertCircle className="w-5 h-5 flex-shrink-0 text-muted-foreground/50" />
               <div>
                 <p className="text-sm text-muted-foreground">PM2 is not installed or not running on this server.</p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
                   Install PM2 with{" "}
                   <code className="font-mono px-1 py-0.5 rounded"
-                    style={{ background: "rgba(255,90,31,.12)", color: "#ffb89f" }}>
+                    style={{ background: "rgba(230,173,104,.12)", color: "#ffb89f" }}>
                     npm install -g pm2
                   </code>
                 </p>
@@ -591,16 +595,16 @@ export default function HomePage() {
             </div>
           ) : pm2Processes.length === 0 ? (
             <div className="rounded-xl p-5 flex items-center gap-3"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.15)" }}>
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.15)" }}>
               <Layers className="w-5 h-5 flex-shrink-0 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">No PM2 processes running.</p>
             </div>
           ) : (
             <div className="ops-panel rounded-2xl overflow-hidden"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}>
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}>
               {/* Table header */}
               <div className="grid grid-cols-12 gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60"
-                style={{ borderBottom: "1px solid rgba(255,90,31,.1)", background: "rgba(255,90,31,.04)" }}>
+                style={{ borderBottom: "1px solid rgba(230,173,104,.1)", background: "rgba(230,173,104,.04)" }}>
                 <div className="col-span-1">ID</div>
                 <div className="col-span-3">Name</div>
                 <div className="col-span-2">Status</div>
@@ -614,12 +618,12 @@ export default function HomePage() {
                 const isOnline = proc.status === "online";
                 const isStopped = proc.status === "stopped";
                 const StatusIcon = isOnline ? CheckCircle2 : isStopped ? XCircle : AlertCircle;
-                const statusColor = isOnline ? "#ffd1c2" : isStopped ? "#ff6b6b" : "#f59e0b";
+                const statusColor = isOnline ? "#f0c58f" : isStopped ? "#ff6b6b" : "#f59e0b";
                 return (
                   <div
                     key={proc.id}
                     className="grid grid-cols-12 gap-2 px-4 py-3 text-xs items-center transition-colors hover:bg-white/[0.04] cursor-pointer group"
-                    style={{ borderBottom: idx < pm2Processes.length - 1 ? "1px solid rgba(255,90,31,.08)" : "none" }}
+                    style={{ borderBottom: idx < pm2Processes.length - 1 ? "1px solid rgba(230,173,104,.08)" : "none" }}
                     onClick={() => navigate(`/pm2/${encodeURIComponent(proc.name)}`)}
                   >
                     <div className="col-span-1 text-muted-foreground font-mono">{proc.id}</div>
@@ -644,11 +648,11 @@ export default function HomePage() {
                     <div className="col-span-1 flex items-center justify-between">
                       {proc.watch ? (
                         <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                          style={{ background: "rgba(255,90,31,.15)", color: "#ffb89f" }}>on</span>
+                          style={{ background: "rgba(230,173,104,.15)", color: "#ffb89f" }}>on</span>
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-[#ff5a1f] transition-colors" />
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-[#e6ad68] transition-colors" />
                     </div>
                   </div>
                 );
@@ -660,11 +664,11 @@ export default function HomePage() {
         {/* Deployed Sites */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <Globe className="w-4 h-4" style={{ color: "#ffd1c2" }} />
+            <Globe className="w-4 h-4" style={{ color: "#f0c58f" }} />
             <h2 className="text-sm font-bold text-foreground">Deployed Sites</h2>
             {!sitesLoading && sitesList.length > 0 && (
               <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: "rgba(255,255,255,.1)", color: "#ffd1c2", border: "1px solid rgba(255,255,255,.2)" }}>
+                style={{ background: "rgba(255,255,255,.1)", color: "#f0c58f", border: "1px solid rgba(255,255,255,.2)" }}>
                 {sitesList.length} sites
               </span>
             )}
@@ -676,7 +680,7 @@ export default function HomePage() {
             </div>
           ) : sitesList.length === 0 ? (
             <div className="rounded-xl p-5 flex items-center gap-3"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.15)" }}>
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.15)" }}>
               <Globe className="w-5 h-5 flex-shrink-0 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">No nginx sites found in <code className="font-mono text-xs">/etc/nginx/sites-enabled/</code></p>
             </div>
@@ -685,7 +689,7 @@ export default function HomePage() {
               {sitesList.map((site) => {
                 const isUp = site.status !== null && site.status >= 200 && site.status < 400;
                 const isDown = site.status === null || site.status >= 500;
-                const statusColor = isUp ? "#ffd1c2" : isDown ? "#ff6b6b" : "#f59e0b";
+                const statusColor = isUp ? "#f0c58f" : isDown ? "#ff6b6b" : "#f59e0b";
                 const statusLabel = site.status === null ? "Timeout" : String(site.status);
                 const StatusIcon = isUp ? CheckCircle2 : isDown ? XCircle : AlertCircle;
                 const scheme = site.ssl ? "https" : "http";
@@ -694,7 +698,7 @@ export default function HomePage() {
 
                 return (
                   <div key={site.domain} className="ops-panel rounded-xl p-4 flex flex-col gap-3"
-                    style={{ background: "#111113", border: "1px solid rgba(255,90,31,.15)" }}>
+                    style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.15)" }}>
                     {/* Header */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -723,7 +727,7 @@ export default function HomePage() {
                     {(site.root || site.git?.gitRoot) && (
                       <button
                         onClick={() => navigate(`/files?path=${encodeURIComponent(site.root ?? site.git!.gitRoot)}`)}
-                        className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground/50 hover:text-[#ff5a1f] transition-colors text-left truncate w-full"
+                        className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground/50 hover:text-[#e6ad68] transition-colors text-left truncate w-full"
                       >
                         <FolderOpen className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">{site.root ?? site.git!.gitRoot}</span>
@@ -747,8 +751,8 @@ export default function HomePage() {
                       return (
                         <div className="flex flex-col gap-1 pt-1 border-t border-white/5">
                           <div className="flex items-center gap-1.5">
-                            <GitBranch className="w-3 h-3 flex-shrink-0" style={{ color: "#ff5a1f" }} />
-                            <span className="text-xs font-mono text-[#ff5a1f]">{site.git.branch || "HEAD"}</span>
+                            <GitBranch className="w-3 h-3 flex-shrink-0" style={{ color: "#e6ad68" }} />
+                            <span className="text-xs font-mono text-[#e6ad68]">{site.git.branch || "HEAD"}</span>
                             {site.git.dirty && (
                               <span className="text-[10px] font-bold px-1 rounded" style={{ background: "rgba(245,158,11,.15)", color: "#f59e0b" }}>dirty</span>
                             )}
@@ -758,7 +762,7 @@ export default function HomePage() {
                                   href={`https://github.com/${ghRepo}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-[#ffd1c2] transition-colors"
+                                  className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-[#f0c58f] transition-colors"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" /></svg>
@@ -772,9 +776,9 @@ export default function HomePage() {
                                 title="git pull"
                                 className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors disabled:opacity-50"
                                 style={{
-                                  background: pullState === "ok" ? "rgba(255,255,255,.12)" : pullState === "error" ? "rgba(255,107,107,.12)" : "rgba(255,90,31,.12)",
-                                  color: pullState === "ok" ? "#ffd1c2" : pullState === "error" ? "#ff6b6b" : "#ffb89f",
-                                  border: `1px solid ${pullState === "ok" ? "rgba(255,255,255,.2)" : pullState === "error" ? "rgba(255,107,107,.2)" : "rgba(255,90,31,.2)"}`,
+                                  background: pullState === "ok" ? "rgba(255,255,255,.12)" : pullState === "error" ? "rgba(255,107,107,.12)" : "rgba(230,173,104,.12)",
+                                  color: pullState === "ok" ? "#f0c58f" : pullState === "error" ? "#ff6b6b" : "#ffb89f",
+                                  border: `1px solid ${pullState === "ok" ? "rgba(255,255,255,.2)" : pullState === "error" ? "rgba(255,107,107,.2)" : "rgba(230,173,104,.2)"}`,
                                 }}
                               >
                                 {pullState === "loading"
@@ -786,7 +790,7 @@ export default function HomePage() {
                           </div>
                           {commitHash && (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-mono px-1 rounded" style={{ background: "rgba(255,255,255,.08)", color: "#ffd1c2" }}>{commitHash}</span>
+                              <span className="text-[10px] font-mono px-1 rounded" style={{ background: "rgba(255,255,255,.08)", color: "#f0c58f" }}>{commitHash}</span>
                               <span className="text-[10px] text-muted-foreground/40 truncate">{commitMsg}</span>
                             </div>
                           )}
@@ -796,7 +800,7 @@ export default function HomePage() {
                               className="text-[9px] font-mono leading-relaxed rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap"
                               style={{
                                 background: "rgba(0,0,0,.4)",
-                                color: pullState === "error" ? "#ff9999" : "#ffd1c2",
+                                color: pullState === "error" ? "#ff9999" : "#f0c58f",
                                 border: "1px solid rgba(255,255,255,.05)",
                                 maxHeight: "80px",
                               }}
@@ -822,11 +826,11 @@ export default function HomePage() {
         {/* Git Repositories */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <GitBranch className="w-4 h-4" style={{ color: "#ff5a1f" }} />
+            <GitBranch className="w-4 h-4" style={{ color: "#e6ad68" }} />
             <h2 className="text-sm font-bold text-foreground">Git Repositories</h2>
             {!gitLoading && gitRepos.length > 0 && (
               <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: "rgba(255,90,31,.12)", color: "#ffb89f", border: "1px solid rgba(255,90,31,.2)" }}>
+                style={{ background: "rgba(230,173,104,.12)", color: "#ffb89f", border: "1px solid rgba(230,173,104,.2)" }}>
                 {gitRepos.length} repo{gitRepos.length !== 1 ? "s" : ""}
               </span>
             )}
@@ -838,7 +842,7 @@ export default function HomePage() {
             </div>
           ) : gitRepos.length === 0 ? (
             <div className="rounded-xl p-5 flex items-center gap-3"
-              style={{ background: "#111113", border: "1px solid rgba(255,90,31,.15)" }}>
+              style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.15)" }}>
               <GitBranch className="w-5 h-5 flex-shrink-0 text-muted-foreground/30" />
               <div>
                 <p className="text-sm text-muted-foreground">No git repositories found on this server.</p>
@@ -861,13 +865,13 @@ export default function HomePage() {
                   <div
                     key={repo.path}
                     className="ops-panel rounded-xl p-4 flex flex-col gap-3"
-                    style={{ background: "#111113", border: "1px solid rgba(255,90,31,.15)" }}
+                    style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.15)" }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ background: "rgba(255,90,31,.12)" }}>
-                          <GitBranch className="w-4 h-4" style={{ color: "#ff5a1f" }} />
+                          style={{ background: "rgba(230,173,104,.12)" }}>
+                          <GitBranch className="w-4 h-4" style={{ color: "#e6ad68" }} />
                         </div>
                         <div className="min-w-0">
                           <p className="font-bold text-sm text-foreground truncate">{repoName}</p>
@@ -896,7 +900,7 @@ export default function HomePage() {
                     <div className="flex flex-wrap gap-2 text-xs">
                       {repo.branch && (
                         <span className="flex items-center gap-1 px-2 py-0.5 rounded font-mono"
-                          style={{ background: "rgba(255,255,255,.08)", color: "#ffd1c2" }}>
+                          style={{ background: "rgba(255,255,255,.08)", color: "#f0c58f" }}>
                           <GitBranch className="w-3 h-3" />
                           {repo.branch}
                         </span>

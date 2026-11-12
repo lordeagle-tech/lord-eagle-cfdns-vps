@@ -30,6 +30,8 @@ export const serversTable = mysqlTable("servers", {
   password: text("password"),
   privateKey: text("private_key"),
   passphrase: text("passphrase"),
+  hostFingerprint: varchar("host_fingerprint", { length: 128 }),
+  pendingHostFingerprint: varchar("pending_host_fingerprint", { length: 128 }),
   status: varchar("status", { length: 32 }).notNull().default("unknown"),
   notes: text("notes"),
   createdAt: datetime("created_at", { mode: "date" }).notNull().default(sql`CURRENT_TIMESTAMP`),

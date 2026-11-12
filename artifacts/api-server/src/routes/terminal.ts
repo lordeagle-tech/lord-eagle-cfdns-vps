@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { exec } from "child_process";
 import { ExecCommandBody } from "@workspace/api-zod";
+import { audit } from "../security/audit";
 
 const router = Router();
 
@@ -17,7 +18,11 @@ router.post("/terminal/exec", (req, res) => {
     shell: "/bin/bash" as string | undefined,
   };
 
-  exec(command, options, (err, stdout, stderr) => {
+  exec(command, options, async (err, stdout, stderr) => {
+    await audit(req, "terminal.local.exec", "host", "local", err ? "failed" : "success", {
+      commandLength: command.length,
+      cwd: options.cwd,
+    }).catch(() => undefined);
     res.json({
       stdout: stdout ?? "",
       stderr: stderr ?? "",

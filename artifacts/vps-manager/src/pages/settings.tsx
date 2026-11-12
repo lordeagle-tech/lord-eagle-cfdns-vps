@@ -1,222 +1,113 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Footer } from "@/components/footer";
-import { KeyRound, Eye, EyeOff, LogOut, ShieldCheck, Save, RefreshCw } from "lucide-react";
+import { KeyRound, Clipboard, LogOut, ShieldCheck, RefreshCw, ShieldAlert } from "lucide-react";
 
 export default function SettingsPage() {
-  const { apiKey, logout } = useAuth();
+  const { logout } = useAuth();
   const { toast } = useToast();
-  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-
-  const [maskedKey, setMaskedKey]       = useState<string>("••••••••••");
-  const [currentKey, setCurrentKey]     = useState("");
-  const [newKey, setNewKey]             = useState("");
-  const [confirmKey, setConfirmKey]     = useState("");
-  const [showCurrent, setShowCurrent]   = useState(false);
-  const [showNew, setShowNew]           = useState(false);
-  const [showConfirm, setShowConfirm]   = useState(false);
-  const [saving, setSaving]             = useState(false);
-  const [loadingMask, setLoadingMask]   = useState(true);
+  const [maskedKey, setMaskedKey] = useState("••••••••••");
+  const [oneTimeKey, setOneTimeKey] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<{ id: number; action: string; targetType: string; targetId: string | null; status: string; createdAt: string }[]>([]);
 
   useEffect(() => {
-    fetch("/api/settings", { headers })
-      .then((r) => r.json())
-      .then((d) => { setMaskedKey(d.maskedKey ?? "••••••••••"); })
-      .catch(() => {})
-      .finally(() => setLoadingMask(false));
+    fetch("/api/settings", { credentials: "include", cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setMaskedKey(data.maskedKey ?? "••••••••••"))
+      .catch(() => toast({ title: "Settings unavailable", description: "Could not load security settings.", variant: "destructive" }))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => {
+    fetch("/api/audit/logs?limit=20", { credentials: "include", cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setAuditEntries(data.entries ?? []))
+      .catch(() => {});
   }, []);
 
-  async function handleChangeKey(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newKey || !currentKey) return;
-    if (newKey !== confirmKey) {
-      toast({ title: "Keys don't match", description: "New key and confirmation must match.", variant: "destructive" });
-      return;
-    }
-    if (newKey.length < 8) {
-      toast({ title: "Too short", description: "Key must be at least 8 characters.", variant: "destructive" });
-      return;
-    }
-    setSaving(true);
+  async function rotateKey() {
+    if (!window.confirm("Rotate the administrator login key? The new key will be shown once and other browser sessions will be revoked.")) return;
+    setBusy(true);
     try {
-      const res = await fetch("/api/settings/key", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ currentKey, newKey }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: "Failed", description: data.error ?? "Could not update key.", variant: "destructive" });
-        return;
-      }
-      setMaskedKey(data.maskedKey ?? "••••••••••");
-      setCurrentKey("");
-      setNewKey("");
-      setConfirmKey("");
-      toast({
-        title: "Key updated",
-        description: "Your API key has been changed. You will be logged out now.",
-      });
-      setTimeout(() => logout(), 1500);
+      const response = await fetch("/api/auth/rotate-key", { method: "POST", credentials: "include" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Key rotation failed");
+      setOneTimeKey(data.apiKey);
+      setMaskedKey(`${data.apiKey.slice(0, 4)}••••••••${data.apiKey.slice(-2)}`);
+      toast({ title: "Key rotated", description: "Copy and store the new key securely. It will not be shown again." });
+    } catch (error) {
+      toast({ title: "Rotation failed", description: error instanceof Error ? error.message : "Could not rotate the key.", variant: "destructive" });
+    } finally { setBusy(false); }
+  }
+
+  async function revokeOtherSessions() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/auth/sessions/revoke-others", { method: "POST", credentials: "include" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Session revocation failed");
+      toast({ title: "Other sessions revoked", description: "This browser remains signed in." });
+    } catch (error) {
+      toast({ title: "Could not revoke sessions", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally { setBusy(false); }
+  }
+
+  async function copyKey() {
+    try {
+      await navigator.clipboard.writeText(oneTimeKey);
+      toast({ title: "Copied", description: "Save the key in a password manager; this is the only time it is displayed." });
     } catch {
-      toast({ title: "Network error", description: "Could not reach the server.", variant: "destructive" });
-    } finally {
-      setSaving(false);
+      toast({ title: "Copy unavailable", description: "Select and copy the key manually.", variant: "destructive" });
     }
   }
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full space-y-6">
-
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-black tracking-tight brand-gradient">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your CFDNS MANAGER configuration</p>
+          <p className="text-sm text-muted-foreground mt-1">Manage administrator access and security</p>
         </div>
 
-        {/* Current key card */}
-        <div
-          className="rounded-2xl border p-5 space-y-3"
-          style={{ background: "rgba(255,90,31,.06)", borderColor: "rgba(255,90,31,.2)" }}
-        >
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#ff5a1f]" />
-            <span className="text-sm font-semibold">Active API Key</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <code
-              className="flex-1 px-4 py-2.5 rounded-xl font-mono text-sm tracking-widest"
-              style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", color: "#ffd1c2" }}
-            >
-              {loadingMask ? <RefreshCw className="w-3.5 h-3.5 animate-spin inline" /> : maskedKey}
-            </code>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Key is masked for security. Use the form below to rotate it.
-          </p>
-        </div>
+        <section className="rounded-2xl border p-5 space-y-4" style={{ background: "rgba(230,173,104,.05)", borderColor: "rgba(230,173,104,.18)" }}>
+          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-300" /><span className="text-sm font-semibold">Administrator login key</span></div>
+          <code className="block px-4 py-3 rounded-xl font-mono text-sm tracking-widest bg-black/20">{loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin inline" /> : maskedKey}</code>
+          <p className="text-xs text-muted-foreground">The key is only used to start a browser session. It cannot authenticate ordinary API requests directly.</p>
+          <Button onClick={rotateKey} disabled={busy} className="gap-2 font-semibold"><KeyRound className="w-4 h-4" />{busy ? "Working…" : "Generate a new login key"}</Button>
+          {oneTimeKey && <div className="space-y-2 rounded-xl border border-amber-300/30 p-4" role="status">
+            <p className="text-sm font-semibold">Copy this key now — it will not be shown again.</p>
+            <code className="block break-all select-all rounded-lg bg-black/30 p-3 font-mono text-xs">{oneTimeKey}</code>
+            <Button variant="outline" size="sm" onClick={copyKey} className="gap-2"><Clipboard className="w-4 h-4" />Copy key</Button>
+          </div>}
+        </section>
 
-        {/* Change key form */}
-        <form
-          onSubmit={handleChangeKey}
-          className="rounded-2xl border p-5 space-y-4"
-          style={{ background: "rgba(255,255,255,.02)", borderColor: "rgba(255,255,255,.08)" }}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <KeyRound className="w-4 h-4 text-[#ffd1c2]" />
-            <span className="text-sm font-semibold">Rotate API Key</span>
-          </div>
+        <section className="rounded-2xl border p-5 space-y-3 bg-white/[.02] border-white/10">
+          <div className="flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-amber-300" /><span className="text-sm font-semibold">Browser sessions</span></div>
+          <p className="text-xs text-muted-foreground">Revoke every other signed-in browser while keeping this session active. Changing your login key also revokes other sessions.</p>
+          <Button variant="outline" disabled={busy} onClick={revokeOtherSessions}>Revoke other sessions</Button>
+        </section>
 
-          {/* Current key */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">Current Key</label>
-            <div className="relative">
-              <Input
-                type={showCurrent ? "text" : "password"}
-                placeholder="Enter your current API key"
-                value={currentKey}
-                onChange={(e) => setCurrentKey(e.target.value)}
-                className="pr-10 font-mono text-sm"
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrent((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+        <section className="rounded-2xl border p-5 space-y-3 bg-white/[.02] border-white/10">
+          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-300" /><span className="text-sm font-semibold">Recent security and operations activity</span></div>
+          <p className="text-xs text-muted-foreground">Latest 20 recorded actions. Sensitive event metadata is deliberately not shown here.</p>
+          {auditEntries.length ? <div className="divide-y divide-white/5">
+            {auditEntries.map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+              <span className="font-medium">{entry.action} <span className="text-muted-foreground">· {entry.targetType}{entry.targetId ? ` ${entry.targetId}` : ""}</span></span>
+              <span className="text-muted-foreground">{entry.status} · {new Date(entry.createdAt).toLocaleString()}</span>
+            </div>)}
+          </div> : <p className="text-xs text-muted-foreground">No recent audit entries are available.</p>}
+        </section>
 
-          {/* New key */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">New Key</label>
-            <div className="relative">
-              <Input
-                type={showNew ? "text" : "password"}
-                placeholder="Min 8 characters"
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                className="pr-10 font-mono text-sm"
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {newKey && newKey.length < 8 && (
-              <p className="text-xs text-destructive">At least 8 characters required</p>
-            )}
-          </div>
-
-          {/* Confirm key */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">Confirm New Key</label>
-            <div className="relative">
-              <Input
-                type={showConfirm ? "text" : "password"}
-                placeholder="Re-enter new key"
-                value={confirmKey}
-                onChange={(e) => setConfirmKey(e.target.value)}
-                className="pr-10 font-mono text-sm"
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {confirmKey && newKey !== confirmKey && (
-              <p className="text-xs text-destructive">Keys do not match</p>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            disabled={saving || !currentKey || !newKey || !confirmKey || newKey !== confirmKey || newKey.length < 8}
-            className="w-full gap-2 font-semibold"
-            style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c" }}
-          >
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? "Saving…" : "Save New Key"}
-          </Button>
-
-          <p className="text-xs text-muted-foreground text-center">
-            After saving, you will be logged out automatically so you can log in with the new key.
-          </p>
-        </form>
-
-        {/* Danger zone */}
-        <div
-          className="rounded-2xl border p-5 space-y-3"
-          style={{ background: "rgba(255,60,60,.04)", borderColor: "rgba(255,60,60,.2)" }}
-        >
-          <p className="text-sm font-semibold text-destructive">Session</p>
-          <p className="text-xs text-muted-foreground">
-            Logging out clears your session. Your API key stays unchanged.
-          </p>
-          <Button
-            variant="outline"
-            onClick={logout}
-            className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </Button>
-        </div>
+        <section className="rounded-2xl border p-5 space-y-3 border-destructive/20 bg-destructive/[.03]">
+          <p className="text-sm font-semibold text-destructive">Current session</p>
+          <p className="text-xs text-muted-foreground">Logging out clears this browser’s session. The administrator key remains unchanged.</p>
+          <Button variant="outline" onClick={logout} className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"><LogOut className="w-4 h-4" />Logout</Button>
+        </section>
       </div>
-
       <Footer />
     </div>
   );

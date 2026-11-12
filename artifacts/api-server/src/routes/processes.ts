@@ -13,7 +13,7 @@ router.get("/servers/:id/processes", async (req, res): Promise<void> => {
     return;
   }
 
-  const server = await getServerById(idParsed.data.id);
+  const server = await getServerById(idParsed.data.id, Number(req.user?.id ?? 0));
   if (!server) {
     res.status(404).json({ error: "Server not found" });
     return;
@@ -45,7 +45,7 @@ router.get("/servers/:id/processes", async (req, res): Promise<void> => {
 
     res.json({ processes, count: processes.length });
   } catch (err: any) {
-    res.status(400).json({ error: err.message || "Failed to list processes" });
+    res.status(502).json({ error: "Failed to list processes" });
   }
 });
 
@@ -59,7 +59,7 @@ router.post("/servers/:id/processes/:pid/kill", async (req, res): Promise<void> 
   const bodyParsed = killBodySchema.safeParse(req.body ?? {});
   const signal = bodyParsed.success ? (bodyParsed.data.signal ?? "SIGTERM") : "SIGTERM";
 
-  const server = await getServerById(params.data.id);
+  const server = await getServerById(params.data.id, Number(req.user?.id ?? 0));
   if (!server) {
     res.status(404).json({ error: "Server not found" });
     return;
@@ -78,7 +78,7 @@ router.post("/servers/:id/processes/:pid/kill", async (req, res): Promise<void> 
 
     res.json({ success: true, message: `Process ${params.data.pid} killed` });
   } catch (err: any) {
-    res.status(400).json({ error: err.message || "Failed to kill process" });
+    res.status(502).json({ error: "Failed to stop process" });
   }
 });
 

@@ -354,11 +354,8 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
       (e) => e.type === "directory" && e.name === "logs"
     );
 
-    const authToken = sessionStorage.getItem("xcm_api_key");
-    const authHeader: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
-
     const fetchPm2Logs = (): Promise<string[]> =>
-      fetch(`/api/system/pm2/by-cwd?path=${encodeURIComponent(currentPath)}`, { headers: authHeader })
+      fetch(`/api/system/pm2/by-cwd?path=${encodeURIComponent(currentPath)}`, { credentials: "include" })
         .then((r) => r.ok ? r.json() : null)
         .then((data: { process?: { out?: string | null; err?: string | null } } | null) => {
           if (!data?.process) return [];

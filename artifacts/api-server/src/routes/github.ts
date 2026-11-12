@@ -46,7 +46,7 @@ router.get("/github/profile", async (_req, res) => {
     const { status, data } = await ghRequest("GET", "/user");
     res.status(status).json(data);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(502).json({ error: "GitHub request failed" });
   }
 });
 
@@ -62,7 +62,7 @@ router.patch("/github/profile", async (req, res) => {
     const { status, data } = await ghRequest("PATCH", "/user", body);
     res.status(status).json(data);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(502).json({ error: "GitHub request failed" });
   }
 });
 
@@ -73,7 +73,7 @@ router.get("/github/social-accounts", async (_req, res) => {
     const { status, data } = await ghRequest("GET", "/user/social_accounts");
     res.status(status).json(data);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(502).json({ error: "GitHub request failed" });
   }
 });
 
@@ -84,7 +84,7 @@ router.post("/github/social-accounts", async (req, res) => {
     const { status, data } = await ghRequest("POST", "/user/social_accounts", { account_urls: req.body.account_urls });
     res.status(status).json(data);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(502).json({ error: "GitHub request failed" });
   }
 });
 
@@ -95,7 +95,7 @@ router.delete("/github/social-accounts", async (req, res) => {
     const { status, data } = await ghRequest("DELETE", "/user/social_accounts", { account_urls: req.body.account_urls });
     res.status(status).json(data);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(502).json({ error: "GitHub request failed" });
   }
 });
 
@@ -112,7 +112,7 @@ router.patch("/github/repo/:owner/:repo", async (req, res) => {
     const { status, data } = await ghRequest("PATCH", `/repos/${owner}/${repo}`, body);
     res.status(status).json(data);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(502).json({ error: "GitHub request failed" });
   }
 });
 

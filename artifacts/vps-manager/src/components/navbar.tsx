@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import {
-  Home, FolderOpen, Terminal, Code2, Globe2,
+  Home, FolderOpen, Terminal, Code2, Globe2, Server,
   Github, Send, Instagram, HeadphonesIcon, LogOut, Menu, X, Settings,
 } from "lucide-react";
 import { useState } from "react";
@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/terminal", label: "Terminal", icon: Terminal },
   { href: "/dev", label: "Dev", icon: Code2 },
+  { href: "/connections", label: "Connections", icon: Server },
   { href: "/dns", label: "DNS", icon: Globe2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -40,8 +41,8 @@ export function Navbar() {
       <nav
         className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center px-4 gap-4"
         style={{
-          background: "rgba(8,9,13,.88)",
-          borderBottom: "1px solid rgba(255,90,31,.18)",
+          background: "rgba(14,16,18,.9)",
+          borderBottom: "1px solid rgba(231,187,125,.14)",
           backdropFilter: "blur(16px)",
         }}
       >
@@ -49,7 +50,7 @@ export function Navbar() {
         <Link href="/" className="flex items-center gap-2 flex-shrink-0 mr-2">
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-sm"
-            style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c" }}
+            style={{ background: "linear-gradient(135deg,#e6ad68,#f0c58f)", color: "#171512" }}
           >
             LE
           </div>
@@ -99,8 +100,8 @@ export function Navbar() {
           <div
             className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black select-none mr-1"
             style={{
-              background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)",
-              color: "#0b0b0c",
+              background: "linear-gradient(135deg,#e6ad68,#f0c58f)",
+              color: "#171512",
             }}
             title="Built by Lord Eagle"
           >
@@ -129,7 +130,7 @@ export function Navbar() {
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 pt-14 flex flex-col"
-          style={{ background: "rgba(8,9,13,.96)", backdropFilter: "blur(20px)" }}
+          style={{ background: "rgba(14,16,18,.96)", backdropFilter: "blur(20px)" }}
           onClick={() => setMobileOpen(false)}
         >
           <div className="p-4 space-y-1" onClick={(e) => e.stopPropagation()}>

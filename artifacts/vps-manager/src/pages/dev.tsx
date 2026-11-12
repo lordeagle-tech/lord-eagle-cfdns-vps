@@ -3,14 +3,13 @@ import { Footer } from "@/components/footer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GithubSshSetup } from "@/components/github-ssh-setup";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/auth-context";
 import {
   Github, Send, Instagram, HeadphonesIcon, Coffee, Star, GitFork,
   ExternalLink, ChevronDown, ChevronUp, Terminal,
   Copy, Check, AlertTriangle, Eye, Users, BookOpen, MapPin, Link2,
   Pencil, Save, X, Plus, Trash2, Building2, Globe, Twitter, Loader2,
-  KeyRound, ShieldCheck, ShieldX, RefreshCw,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -166,7 +165,6 @@ function StatPill({ label, value }: { label: string; value: string | number }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function DevPage() {
-  const { apiKey } = useAuth();
   const { toast } = useToast();
 
   const [user, setUser] = useState<GitHubUser | null>(null);
@@ -190,16 +188,7 @@ export default function DevPage() {
   const [addingSocial, setAddingSocial] = useState(false);
   const [removingSocial, setRemovingSocial] = useState<string | null>(null);
 
-  const [sshStatus, setSshStatus] = useState<{
-    keys: { type: string; publicKey: string; fingerprint: string }[];
-    connected: boolean;
-    authUser: string | null;
-    sshTestOutput: string;
-  } | null>(null);
-  const [sshLoading, setSshLoading] = useState(true);
-  const [sshRefreshing, setSshRefreshing] = useState(false);
-
-  const authHeaders: Record<string, string> = apiKey ? { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
 
   const fetchSocials = useCallback(async () => {
     setSocialsLoading(true);
@@ -208,7 +197,7 @@ export default function DevPage() {
       if (r.ok) setSocials(await r.json() as SocialAccount[]);
     } catch { /* ignore */ }
     setSocialsLoading(false);
-  }, [apiKey]);
+  }, []);
 
   const openEditor = useCallback(() => {
     if (user) {
@@ -262,7 +251,7 @@ export default function DevPage() {
       toast({ title: "Network error", variant: "destructive" });
     }
     setSaving(false);
-  }, [profileForm, apiKey]);
+  }, [profileForm]);
 
   const addSocial = useCallback(async () => {
     if (!newSocialUrl.trim()) return;
@@ -285,7 +274,7 @@ export default function DevPage() {
       toast({ title: "Network error", variant: "destructive" });
     }
     setAddingSocial(false);
-  }, [newSocialUrl, apiKey, fetchSocials]);
+  }, [newSocialUrl, fetchSocials]);
 
   const removeSocial = useCallback(async (url: string) => {
     setRemovingSocial(url);
@@ -305,24 +294,7 @@ export default function DevPage() {
       toast({ title: "Network error", variant: "destructive" });
     }
     setRemovingSocial(null);
-  }, [apiKey, fetchSocials]);
-
-  const fetchSshStatus = useCallback(async (quiet = false) => {
-    if (!quiet) setSshLoading(true);
-    else setSshRefreshing(true);
-    try {
-      const res = await fetch("/api/system/github-ssh", {
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-      });
-      if (res.ok) setSshStatus(await res.json());
-    } catch { /* ignore */ }
-    setSshLoading(false);
-    setSshRefreshing(false);
-  }, [apiKey]);
-
-  useEffect(() => {
-    fetchSshStatus();
-  }, [fetchSshStatus]);
+  }, [fetchSocials]);
 
   useEffect(() => {
     fetch("https://api.github.com/users/lordeagle-tech", { headers: GH_HEADERS })
@@ -613,156 +585,7 @@ export default function DevPage() {
           </Card>
         </section>
 
-        {/* ── VPS → GitHub SSH Connection ── */}
-        <section>
-          <SectionHeader>VPS → GitHub Connection</SectionHeader>
-          <Card>
-            {sshLoading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-10 w-full rounded-xl" />
-                <Skeleton className="h-20 w-full rounded-xl" />
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {/* Status banner */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    {sshStatus?.connected ? (
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.25)" }}>
-                        <ShieldCheck className="w-5 h-5" style={{ color: "#ffd1c2" }} />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(255,107,107,.1)", border: "1px solid rgba(255,107,107,.25)" }}>
-                        <ShieldX className="w-5 h-5" style={{ color: "#ff6b6b" }} />
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-bold text-foreground">
-                        {sshStatus?.connected
-                          ? `Connected${sshStatus.authUser ? ` as @${sshStatus.authUser}` : ""}`
-                          : "Not connected to GitHub via SSH"}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {sshStatus?.connected
-                          ? "This VPS can authenticate to GitHub using SSH"
-                          : sshStatus?.keys.length === 0
-                            ? "No SSH keys found — generate one to get started"
-                            : "SSH key exists but GitHub auth failed — add the key to your GitHub account"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs border-border/50 flex-shrink-0"
-                    onClick={() => fetchSshStatus(true)}
-                    disabled={sshRefreshing}
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${sshRefreshing ? "animate-spin" : ""}`} />
-                    Re-test
-                  </Button>
-                </div>
-
-                {/* SSH Keys */}
-                {sshStatus && sshStatus.keys.length > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
-                      SSH Keys on this VPS
-                    </p>
-                    {sshStatus.keys.map((key) => (
-                      <div key={key.type} className="rounded-xl p-4 space-y-3"
-                        style={{ background: "#0b0b0c", border: "1px solid rgba(255,90,31,.15)" }}>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <KeyRound className="w-4 h-4 flex-shrink-0" style={{ color: "#ff5a1f" }} />
-                            <span className="text-sm font-bold text-foreground font-mono">
-                              ~/.ssh/{key.type}
-                            </span>
-                          </div>
-                          {key.fingerprint && (
-                            <span className="text-xs font-mono text-muted-foreground/60 truncate max-w-[200px]">
-                              {key.fingerprint}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs text-muted-foreground/50 uppercase tracking-wider font-semibold">Public Key</span>
-                            <button
-                              onClick={() => copy(key.publicKey, `ssh-${key.type}`)}
-                              className="flex items-center gap-1 text-xs transition-colors"
-                              style={{ color: copied === `ssh-${key.type}` ? "#ffd1c2" : "var(--muted-foreground)" }}
-                            >
-                              {copied === `ssh-${key.type}`
-                                ? <><Check className="w-3 h-3" /> Copied</>
-                                : <><Copy className="w-3 h-3" /> Copy</>}
-                            </button>
-                          </div>
-                          <div className="rounded-lg p-2.5 overflow-x-auto"
-                            style={{ background: "rgba(255,90,31,.05)", border: "1px solid rgba(255,90,31,.1)" }}>
-                            <code className="text-xs font-mono break-all leading-relaxed"
-                              style={{ color: "rgba(255,255,255,.55)" }}>
-                              {key.publicKey}
-                            </code>
-                          </div>
-                        </div>
-                        {!sshStatus.connected && (
-                          <a
-                            href="https://github.com/settings/keys"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-xs font-semibold transition-colors hover:opacity-80 w-fit"
-                            style={{ color: "#ff5a1f" }}
-                          >
-                            <Github className="w-3.5 h-3.5" />
-                            Add this key to GitHub →
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : sshStatus && sshStatus.keys.length === 0 ? (
-                  <div className="rounded-xl p-4 space-y-2"
-                    style={{ background: "#0b0b0c", border: "1px solid rgba(255,90,31,.1)" }}>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">Generate an SSH key on the VPS:</p>
-                    <div className="relative rounded-lg overflow-hidden"
-                      style={{ background: "rgba(0,0,0,.4)", border: "1px solid rgba(255,90,31,.15)" }}>
-                      <pre className="text-xs font-mono text-foreground/70 p-3 pr-10">
-                        {`ssh-keygen -t ed25519 -C "company@lordeagle.co.ke"`}
-                      </pre>
-                      <button
-                        onClick={() => copy(`ssh-keygen -t ed25519 -C "company@lordeagle.co.ke"`, "gen-key")}
-                        className="absolute top-2 right-2 p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {copied === "gen-key" ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground/50">
-                      Then copy the public key from <code className="font-mono">~/.ssh/id_ed25519.pub</code> and
-                      add it at <a href="https://github.com/settings/keys" target="_blank" rel="noopener noreferrer"
-                        className="underline" style={{ color: "#ff5a1f" }}>github.com/settings/keys</a>.
-                    </p>
-                  </div>
-                ) : null}
-
-                {/* Raw test output (collapsed) */}
-                {sshStatus?.sshTestOutput && (
-                  <details className="group">
-                    <summary className="text-xs text-muted-foreground/40 cursor-pointer hover:text-muted-foreground/70 transition-colors select-none">
-                      SSH test output
-                    </summary>
-                    <div className="mt-2 rounded-lg p-2.5"
-                      style={{ background: "#0b0b0c", border: "1px solid rgba(255,90,31,.1)" }}>
-                      <code className="text-xs font-mono text-foreground/50">{sshStatus.sshTestOutput}</code>
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
-          </Card>
-        </section>
+        <GithubSshSetup />
 
         {/* ── GitHub repo card ── */}
         <section>

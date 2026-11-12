@@ -191,19 +191,46 @@
   }
 }
 
-/* Local Loop theme adaptation: editorial dark surfaces, orange signal accent, quiet borders. */
+/* Authenticated dashboard theme: clean graphite surfaces with a restrained amber signal. */
 @layer utilities {
-  .loop-surface { background: #111113; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; }
-  .loop-surface-strong { background: #17171a; border: 1px solid rgba(255,255,255,.16); border-radius: 20px; }
-  .loop-accent { color: #ff5a1f; }
-  .loop-label { color: #8f8e8b; font-family: var(--app-font-mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+  .dashboard-theme {
+    --dashboard-bg: #0e1012;
+    --dashboard-surface: #15181b;
+    --dashboard-surface-raised: #1b1f22;
+    --dashboard-line: rgba(231, 187, 125, .12);
+    --dashboard-amber: #e6ad68;
+    --dashboard-amber-soft: #f0c58f;
+    background-color: var(--dashboard-bg);
+    background-image: radial-gradient(ellipse 78% 45% at 50% -12%, rgba(230,173,104,.075), transparent 72%);
+    color: #e9e6e0;
+    accent-color: var(--dashboard-amber);
+  }
+  .dashboard-theme .ops-panel {
+    background: linear-gradient(145deg, rgba(27,31,34,.98), rgba(20,23,26,.98));
+    border-color: var(--dashboard-line);
+    box-shadow: 0 12px 34px rgba(0,0,0,.18);
+  }
+  .dashboard-theme .loop-surface { background: var(--dashboard-surface); border: 1px solid var(--dashboard-line); border-radius: 20px; }
+  .dashboard-theme .loop-surface-strong { background: var(--dashboard-surface-raised); border: 1px solid rgba(231,187,125,.2); border-radius: 20px; }
+  .dashboard-theme .loop-accent { color: var(--dashboard-amber); }
+  .dashboard-theme .loop-label { color: #a39c91; font-family: var(--app-font-mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+  .dashboard-theme .ops-kicker { color: var(--dashboard-amber); }
+  .dashboard-theme .status-pulse { background: var(--dashboard-amber); box-shadow: 0 0 0 4px rgba(230,173,104,.1), 0 0 14px rgba(230,173,104,.48); }
+  .dashboard-theme input:not([type="checkbox"]), .dashboard-theme textarea, .dashboard-theme select {
+    background-color: rgba(12,14,16,.82);
+    border-color: rgba(231,187,125,.14);
+  }
+  .dashboard-theme input:focus, .dashboard-theme textarea:focus, .dashboard-theme select:focus {
+    border-color: rgba(230,173,104,.52);
+    box-shadow: 0 0 0 2px rgba(230,173,104,.12);
+  }
 }
 
 /* Local Loop network-connections view for the first dashboard surface. */
 .loop-network-visual { position: absolute; z-index: 0; top: 12px; right: clamp(18px, 7vw, 120px); width: min(46vw, 560px); height: 250px; opacity: .78; pointer-events: none; }
 .loop-network-grid { position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,.32) 1px, transparent 1.5px); background-size: 26px 26px; mask-image: radial-gradient(ellipse at center, black 15%, transparent 74%); opacity: .26; }
-.loop-network-line { position: absolute; height: 2px; transform-origin: left center; background: repeating-linear-gradient(90deg, rgba(255,90,31,.82) 0 6px, rgba(255,255,255,.12) 6px 16px, transparent 16px 26px); background-size: 26px 2px; box-shadow: 0 0 10px rgba(255,90,31,.18); animation: loop-line-flow 2.4s linear infinite; }
-.loop-network-line::after { content: ""; position: absolute; left: 0; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: #ffb08f; box-shadow: 0 0 12px #ff5a1f; animation: loop-packet-flow 2.4s linear infinite; }
+.loop-network-line { position: absolute; height: 2px; transform-origin: left center; background: repeating-linear-gradient(90deg, rgba(255,90,31,.82) 0 6px, rgba(255,255,255,.12) 6px 16px, transparent 16px 26px); background-size: 26px 2px; box-shadow: 0 0 10px rgba(255,90,31,.18); animation: loop-line-flow 1.5s linear infinite; }
+.loop-network-line::after { content: ""; position: absolute; left: 0; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: #ffb08f; box-shadow: 0 0 12px #ff5a1f; animation: loop-packet-flow 1.5s linear infinite; }
 .loop-network-line-one { width: 230px; left: 43%; top: 48%; transform: rotate(-22deg); }
 .loop-network-line-two { width: 190px; left: 43%; top: 50%; transform: rotate(23deg); animation-direction: reverse; animation-delay: -.8s; }
 .loop-network-line-two::after { animation-direction: reverse; animation-delay: -.8s; }
@@ -213,39 +240,56 @@
 .loop-network-line-five { width: 58vw; left: 50%; top: 50%; transform: rotate(28deg); opacity: .42; animation-direction: reverse; animation-delay: -1.1s; }
 .loop-network-line-six { width: 48vw; left: 50%; top: 50%; transform: rotate(92deg); opacity: .32; animation-delay: -1.8s; }
 .loop-network-line-four, .loop-network-line-five, .loop-network-line-six { background: repeating-linear-gradient(90deg, rgba(255,255,255,.82) 0 6px, rgba(255,255,255,.2) 6px 16px, transparent 16px 26px); box-shadow: 0 0 14px rgba(255,255,255,.24); }
-.loop-network-line-four::after, .loop-network-line-five::after, .loop-network-line-six::after { background: #fff; box-shadow: 0 0 18px rgba(255,255,255,1), 0 0 30px rgba(255,255,255,.42); animation-duration: 1.8s; }
-.loop-network-line-four::before, .loop-network-line-five::before, .loop-network-line-six::before { content: ""; position: absolute; left: 0; top: -6px; width: 42px; height: 12px; border-radius: 999px; background: radial-gradient(ellipse at center, rgba(255,255,255,.96), rgba(255,255,255,.34) 42%, transparent 74%); filter: blur(2.5px); mix-blend-mode: screen; animation: loop-packet-flow 1.8s linear infinite; }
+.loop-network-line-four::after, .loop-network-line-five::after, .loop-network-line-six::after { background: #fff; box-shadow: 0 0 18px rgba(255,255,255,1), 0 0 30px rgba(255,255,255,.42); animation-duration: 1.2s; }
+.loop-network-line-four::before, .loop-network-line-five::before, .loop-network-line-six::before { content: ""; position: absolute; left: 0; top: -6px; width: 42px; height: 12px; border-radius: 999px; background: radial-gradient(ellipse at center, rgba(255,255,255,.96), rgba(255,255,255,.34) 42%, transparent 74%); filter: blur(2.5px); mix-blend-mode: screen; animation: loop-packet-flow 1.2s linear infinite; }
 .loop-network-line-five::before { animation-direction: reverse; animation-delay: -1.1s; }
 .loop-network-line-six::before { animation-delay: -1.8s; }
-.loop-network-core { position: absolute; left: 40%; top: 39%; display: grid; place-items: center; width: 54px; height: 54px; border: 1px solid #ff5a1f; border-radius: 50%; background: #111113; color: #ff5a1f; font: 700 12px var(--app-font-mono); box-shadow: 0 0 32px rgba(255,90,31,.28); animation: loop-network-pulse 4s ease-in-out infinite; }
+.loop-network-core { position: absolute; left: 40%; top: 39%; display: grid; place-items: center; width: 54px; height: 54px; border: 1px solid #ff5a1f; border-radius: 50%; background: #111113; color: #ff5a1f; font: 700 12px var(--app-font-mono); box-shadow: 0 0 32px rgba(255,90,31,.28); animation: loop-network-pulse 2.5s ease-in-out infinite; }
 .loop-network-node { position: absolute; display: inline-flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: rgba(17,17,19,.88); color: #8f8e8b; font: 10px var(--app-font-mono); letter-spacing: .04em; }
-.loop-network-node span { width: 6px; height: 6px; border-radius: 50%; background: #ff5a1f; box-shadow: 0 0 10px rgba(255,90,31,.7); animation: loop-node-blink 2s ease-in-out infinite; }
+.loop-network-node span { width: 6px; height: 6px; border-radius: 50%; background: #ff5a1f; box-shadow: 0 0 10px rgba(255,90,31,.7); animation: loop-node-blink 1.2s ease-in-out infinite; }
 .loop-network-node-one { top: 12%; right: 2%; }.loop-network-node-two { bottom: 8%; right: 8%; }.loop-network-node-three { bottom: 18%; left: 6%; }
 .loop-network-node-four { top: 28%; left: 2%; }.loop-network-node-five { bottom: 30%; right: 2%; }
 .loop-network-caption { position: absolute; top: 8px; right: 4px; color: rgba(237,237,234,.45); font: 9px/1.5 var(--app-font-mono); letter-spacing: .08em; text-align: right; }.loop-network-caption b { color: #ff5a1f; font-weight: 400; }
-.loop-login-network { inset: 0; left: 0; top: 0; right: 0; width: 100%; height: 100%; opacity: .42; transform: none; overflow: hidden; }
-.loop-login-network::before { content: ""; position: absolute; inset: -20%; background: repeating-linear-gradient(26deg, transparent 0 78px, rgba(255,90,31,.10) 79px 80px, transparent 81px 156px), repeating-linear-gradient(151deg, transparent 0 112px, rgba(255,255,255,.07) 113px 114px, transparent 115px 224px); mask-image: radial-gradient(ellipse at center, black 12%, transparent 78%); animation: loop-background-flow 18s linear infinite; }
-.loop-login-network::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle at 12% 24%, rgba(255,90,31,.9) 0 1px, transparent 2px), radial-gradient(circle at 86% 18%, rgba(255,255,255,.7) 0 1px, transparent 2px), radial-gradient(circle at 78% 76%, rgba(255,90,31,.8) 0 1px, transparent 2px), radial-gradient(circle at 18% 82%, rgba(255,255,255,.55) 0 1px, transparent 2px); background-size: 240px 240px, 310px 310px, 280px 280px, 350px 350px; animation: loop-background-drift 14s linear infinite; opacity: .65; }
+.loop-login-network { inset: 0; left: 0; top: 0; right: 0; width: 100%; height: 100%; opacity: .54; transform: none; overflow: hidden; }
+.loop-network-links { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.loop-network-route { fill: none; stroke: rgba(255,155,112,.55); stroke-width: 1.8; stroke-dasharray: 2 8; stroke-linecap: round; animation: loop-route-flow 1.8s linear infinite; filter: drop-shadow(0 0 5px rgba(255,90,31,.58)); }
+.loop-network-route.route-two { animation-delay: -.6s; }.loop-network-route.route-three { animation-delay: -1.2s; }.loop-network-route.route-four { animation-delay: -.9s; }
+.loop-network-route.route-five, .loop-network-route.route-six, .loop-network-route.route-seven, .loop-network-route.route-eight { stroke: rgba(255,255,255,.3); stroke-dasharray: 1 10; animation-duration: 2.5s; }
+.loop-network-route.route-nine, .loop-network-route.route-ten, .loop-network-route.route-eleven, .loop-network-route.route-twelve, .loop-network-route.route-thirteen, .loop-network-route.route-fourteen { stroke: rgba(255,112,63,.72); stroke-width: 2; stroke-dasharray: 3 7; animation-duration: 1.6s; }
+.loop-network-route.route-ten, .loop-network-route.route-twelve, .loop-network-route.route-fourteen { animation-delay: -.8s; }
+.loop-network-endpoints { fill: #ffd1c2; filter: drop-shadow(0 0 6px #ff5a1f); animation: loop-endpoint-pulse 1.8s ease-in-out infinite; }
+.loop-network-junctions { fill: #fff1e8; filter: drop-shadow(0 0 8px #ff5a1f); }
+.loop-network-junctions circle { transform-box: fill-box; transform-origin: center; animation: loop-junction-pulse 1.5s ease-in-out infinite; }
+.loop-network-junctions circle:nth-child(even) { animation-delay: -.75s; }
+.loop-network-signals { fill: #fff; filter: drop-shadow(0 0 9px #ff5a1f) drop-shadow(0 0 3px #fff); }
+.loop-network-signals circle:nth-child(even) { fill: #ff5a1f; }
+.loop-login-network .loop-network-line { opacity: .3; }
+.loop-login-network .loop-network-core, .loop-login-network .loop-network-node { z-index: 2; }
+.loop-login-network::before { content: ""; position: absolute; inset: -20%; background: repeating-linear-gradient(26deg, transparent 0 78px, rgba(255,90,31,.10) 79px 80px, transparent 81px 156px), repeating-linear-gradient(151deg, transparent 0 112px, rgba(255,255,255,.07) 113px 114px, transparent 115px 224px); mask-image: radial-gradient(ellipse at center, black 12%, transparent 78%); animation: loop-background-flow 10s linear infinite; }
+.loop-login-network::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle at 12% 24%, rgba(255,90,31,.9) 0 1px, transparent 2px), radial-gradient(circle at 86% 18%, rgba(255,255,255,.7) 0 1px, transparent 2px), radial-gradient(circle at 78% 76%, rgba(255,90,31,.8) 0 1px, transparent 2px), radial-gradient(circle at 18% 82%, rgba(255,255,255,.55) 0 1px, transparent 2px); background-size: 240px 240px, 310px 310px, 280px 280px, 350px 350px; animation: loop-background-drift 8s linear infinite; opacity: .65; }
 .loop-login-network .loop-network-node-one { top: 12%; right: 5%; }.loop-login-network .loop-network-node-two { bottom: 10%; right: 4%; }.loop-login-network .loop-network-node-three { bottom: 14%; left: 4%; }
 .loop-login-network .loop-network-node-four { top: 30%; left: 5%; }.loop-login-network .loop-network-node-five { bottom: 28%; right: 6%; }
-.loop-float-card { position: relative; overflow: hidden; isolation: isolate; transform-style: preserve-3d; perspective: 900px; animation: loop-card-flip 8s cubic-bezier(.22,1,.36,1) infinite; }
-.loop-float-card::before { content: ""; position: absolute; z-index: -1; inset: -90%; pointer-events: none; background: linear-gradient(112deg, transparent 43%, rgba(255,255,255,.12) 49%, rgba(255,90,31,.18) 51%, transparent 57%); transform: translateX(-48%) rotate(8deg); animation: loop-card-sheen 8s cubic-bezier(.22,1,.36,1) infinite; }
+.loop-float-card { position: relative; overflow: hidden; isolation: isolate; transform-style: preserve-3d; perspective: 900px; animation: loop-card-flip 7s cubic-bezier(.22,1,.36,1) infinite; }
+.loop-float-card::before { content: ""; position: absolute; z-index: -1; inset: -90%; pointer-events: none; background: linear-gradient(112deg, transparent 43%, rgba(255,255,255,.12) 49%, rgba(255,90,31,.18) 51%, transparent 57%); transform: translateX(-48%) rotate(8deg); animation: loop-card-sheen 7s cubic-bezier(.22,1,.36,1) infinite; }
 .loop-float-card > * { position: relative; z-index: 1; }
 .loop-scan-overlay { position: absolute; z-index: 4; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: radial-gradient(circle at center, rgba(255,90,31,.16), rgba(17,17,19,.96) 58%); color: #ffd1c2; animation: loop-scan-in .24s ease-out both; }
 .loop-scan-eye { position: relative; display: grid; place-items: center; width: 118px; height: 68px; border: 1px solid rgba(255,209,194,.74); border-radius: 50% / 62%; transform: rotate(-4deg); box-shadow: 0 0 24px rgba(255,90,31,.22), inset 0 0 18px rgba(255,90,31,.1); overflow: hidden; }
-.loop-scan-eye::after { content: ""; position: absolute; top: -24%; left: 8%; width: 2px; height: 148%; background: linear-gradient(transparent, rgba(255,255,255,.95), #ff5a1f, transparent); box-shadow: 0 0 12px rgba(255,90,31,.85); animation: loop-scan-beam 1.45s ease-in-out infinite; }
-.loop-scan-orbit { position: absolute; inset: 9px 22px; border: 1px dashed rgba(255,209,194,.58); border-radius: 50%; animation: loop-scan-orbit 1.15s linear infinite; }
-.loop-scan-orbit-two { inset: 17px 31px; border-color: rgba(255,90,31,.74); animation-duration: .8s; animation-direction: reverse; }
+.loop-scan-eye::after { content: ""; position: absolute; top: -24%; left: 8%; width: 2px; height: 148%; background: linear-gradient(transparent, rgba(255,255,255,.95), #ff5a1f, transparent); box-shadow: 0 0 12px rgba(255,90,31,.85); animation: loop-scan-beam 2.8s ease-in-out infinite; }
+.loop-scan-overlay:not(.is-granted) .loop-scan-eye { animation: loop-scan-eye-search 2.4s ease-in-out infinite; }
+.loop-scan-orbit { position: absolute; inset: 9px 22px; border: 1px dashed rgba(255,209,194,.58); border-radius: 50%; animation: loop-scan-orbit 2.1s linear infinite; }
+.loop-scan-orbit-two { inset: 17px 31px; border-color: rgba(255,90,31,.74); animation-duration: 1.6s; animation-direction: reverse; }
 .loop-scan-iris { position: relative; display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #ff5a1f; border-radius: 50%; color: #fff; background: #111113; box-shadow: 0 0 18px rgba(255,90,31,.65); }
+.loop-scan-overlay:not(.is-granted) .loop-scan-iris { animation: loop-scan-iris-search 1.7s ease-in-out infinite; }
 .loop-scan-lock { position: absolute; color: #ff5a1f; }
 .loop-scan-label { display: inline-flex; align-items: center; gap: 7px; font: 700 10px var(--app-font-mono); letter-spacing: .18em; text-shadow: 0 0 12px rgba(255,90,31,.6); }
 .loop-scan-meter { width: 132px; height: 2px; overflow: hidden; background: rgba(255,255,255,.13); }
-.loop-scan-meter span { display: block; width: 44%; height: 100%; background: linear-gradient(90deg, transparent, #fff, #ff5a1f, transparent); box-shadow: 0 0 10px rgba(255,90,31,.9); animation: loop-scan-meter 1.1s ease-in-out infinite; }
-.loop-scan-overlay.is-granted { color: #fff; background: radial-gradient(circle at center, rgba(255,90,31,.28), rgba(17,17,19,.96) 62%); animation: loop-scan-granted .4s ease-out both; }
+.loop-scan-meter span { display: block; width: 44%; height: 100%; background: linear-gradient(90deg, transparent, #fff, #ff5a1f, transparent); box-shadow: 0 0 10px rgba(255,90,31,.9); animation: loop-scan-meter 2s ease-in-out infinite; }
+.loop-scan-overlay.is-granted { color: #fff; background: radial-gradient(circle at center, rgba(255,90,31,.28), rgba(17,17,19,.96) 62%); animation: loop-scan-granted .65s ease-out both; }
 .loop-scan-overlay.is-granted .loop-scan-eye { border-color: #ffb08f; box-shadow: 0 0 34px rgba(255,90,31,.48), inset 0 0 22px rgba(255,90,31,.16); }
 .loop-scan-overlay.is-granted .loop-scan-iris { border-color: #fff; box-shadow: 0 0 24px rgba(255,90,31,.9); }
 .loop-login-form.is-scanning { opacity: .14; pointer-events: none; }
-@keyframes loop-card-flip { 0%, 58%, 100% { transform: translateY(0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); } 68% { transform: translateY(-5px) rotateX(2deg) rotateY(9deg) rotateZ(-.5deg) scale(1.008); } 78% { transform: translateY(-10px) rotateX(-1.5deg) rotateY(-14deg) rotateZ(.6deg) scale(1.018); } 88% { transform: translateY(-5px) rotateX(1deg) rotateY(7deg) rotateZ(-.25deg) scale(1.006); } }
+@keyframes loop-card-flip { 0%, 12%, 100% { transform: perspective(900px) translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); } 32% { transform: perspective(900px) translate3d(-8px, -5px, 0) rotateX(2deg) rotateY(-10deg) rotateZ(-.5deg) scale(1.01); } 52% { transform: perspective(900px) translate3d(8px, -10px, 0) rotateX(-1deg) rotateY(12deg) rotateZ(.6deg) scale(1.015); } 72% { transform: perspective(900px) translate3d(5px, -4px, 0) rotateX(1deg) rotateY(7deg) rotateZ(.25deg) scale(1.006); } 88% { transform: perspective(900px) translate3d(-4px, -2px, 0) rotateX(-1deg) rotateY(-6deg) rotateZ(-.25deg) scale(1.003); } }
+@keyframes loop-card-flip-mobile { 0%, 14%, 100% { transform: perspective(1000px) translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); } 34% { transform: perspective(1000px) translate3d(-2px, -3px, 0) rotateX(1deg) rotateY(-3deg) rotateZ(-.15deg) scale(1.003); } 54% { transform: perspective(1000px) translate3d(2px, -5px, 0) rotateX(-.5deg) rotateY(3deg) rotateZ(.15deg) scale(1.005); } 76% { transform: perspective(1000px) translate3d(1px, -2px, 0) rotateX(.5deg) rotateY(2deg) rotateZ(.1deg) scale(1.002); } 90% { transform: perspective(1000px) translate3d(-1px, -1px, 0) rotateX(-.5deg) rotateY(-2deg) rotateZ(-.1deg) scale(1.001); } }
 @keyframes loop-card-sheen { 0%, 55% { transform: translateX(-48%) rotate(8deg); opacity: 0; } 66% { opacity: 1; } 82%, 100% { transform: translateX(48%) rotate(8deg); opacity: 0; } }
 @keyframes loop-line-flow { from { background-position: 0 0; } to { background-position: 52px 0; } }
 @keyframes loop-packet-flow { from { left: 0; opacity: .15; } 12% { opacity: 1; } to { left: calc(100% - 6px); opacity: .1; } }
@@ -258,7 +302,14 @@
 @keyframes loop-scan-orbit { from { transform: rotate(0deg) scaleX(1); } 50% { transform: rotate(180deg) scaleX(.72); } to { transform: rotate(360deg) scaleX(1); } }
 @keyframes loop-scan-beam { 0%, 100% { left: 8%; opacity: .15; } 45% { opacity: 1; } 50% { left: 90%; opacity: 1; } }
 @keyframes loop-scan-meter { from { transform: translateX(-150%); } to { transform: translateX(300%); } }
+@keyframes loop-scan-eye-search { 0%, 100% { transform: rotate(-4deg) scale(1); box-shadow: 0 0 24px rgba(255,90,31,.22), inset 0 0 18px rgba(255,90,31,.1); } 50% { transform: rotate(-4deg) scale(1.045); box-shadow: 0 0 38px rgba(255,90,31,.52), inset 0 0 24px rgba(255,90,31,.2); } }
+@keyframes loop-scan-iris-search { 0%, 100% { transform: scale(.94); box-shadow: 0 0 14px rgba(255,90,31,.48); } 50% { transform: scale(1.1); box-shadow: 0 0 28px rgba(255,90,31,.95); } }
+@keyframes loop-route-flow { to { stroke-dashoffset: -44; } }
+@keyframes loop-endpoint-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes loop-junction-pulse { 0%, 100% { opacity: .52; } 50% { opacity: 1; } }
 @media (max-width: 900px) { .loop-network-visual { right: 12px; width: 52vw; opacity: .45; } }
+@media (max-width: 640px) { .loop-float-card { width: 100%; min-width: 0; transform-origin: center center; animation: loop-card-flip-mobile 8s cubic-bezier(.22,1,.36,1) infinite; } .loop-float-card::before { animation-duration: 8s; } }
+@media (max-width: 380px) { .loop-float-card { padding-left: 1.25rem; padding-right: 1.25rem; animation-duration: 9s; } .loop-float-card::before { animation-duration: 9s; } }
 @media (max-width: 640px) { .loop-network-visual { top: 5px; right: -100px; width: 420px; opacity: .28; } .loop-network-caption { display: none; } }
 @media (max-width: 640px) { .loop-login-network { opacity: .28; } .loop-login-network .loop-network-line-four, .loop-login-network .loop-network-line-five, .loop-login-network .loop-network-line-six { opacity: .22; } }
-@media (prefers-reduced-motion: reduce) { .loop-float-card, .loop-float-card::before, .loop-network-core, .loop-network-line, .loop-network-line::after, .loop-network-node span, .loop-scan-overlay, .loop-scan-eye::after, .loop-scan-orbit, .loop-scan-meter span { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .loop-float-card, .loop-float-card::before, .loop-network-core, .loop-network-line, .loop-network-line::after, .loop-network-node span, .loop-network-links .loop-network-route, .loop-network-endpoints, .loop-network-junctions circle, .loop-scan-overlay, .loop-scan-eye::after, .loop-scan-overlay:not(.is-granted) .loop-scan-eye, .loop-scan-overlay:not(.is-granted) .loop-scan-iris, .loop-scan-orbit, .loop-scan-meter span { animation: none; } .loop-network-signals { display: none; } }

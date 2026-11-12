@@ -12,7 +12,7 @@ router.get("/servers/:id/stats", async (req, res): Promise<void> => {
     return;
   }
 
-  const server = await getServerById(params.data.id);
+  const server = await getServerById(params.data.id, Number(req.user?.id ?? 0));
   if (!server) {
     res.status(404).json({ error: "Server not found" });
     return;
@@ -88,7 +88,7 @@ router.get("/servers/:id/stats", async (req, res): Promise<void> => {
 
     res.json(stats);
   } catch (err: any) {
-    res.status(400).json({ error: err.message || "Failed to get server stats" });
+    res.status(502).json({ error: "Failed to get server stats" });
   }
 });
 

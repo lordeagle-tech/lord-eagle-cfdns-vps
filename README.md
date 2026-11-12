@@ -29,7 +29,7 @@ CFDNS Manager combines Cloudflare DNS operations with direct VPS administration 
 
 ### VPS operations
 
-- Add and manage Linux servers over SSH/SFTP.
+- Add and manage Linux servers over SSH/SFTP after explicit SSH host-key verification.
 - Inspect CPU, memory, disks, network interfaces, uptime, and logged-in users.
 - Browse, read, write, rename, move, and delete remote files.
 - Use an in-browser terminal with a persistent working directory.
@@ -39,7 +39,7 @@ CFDNS Manager combines Cloudflare DNS operations with direct VPS administration 
 
 ### Public-service foundations
 
-- Cookie-backed Manus OAuth sessions with a clearly labeled local API-key fallback.
+- Cookie-backed administrator sessions; the local key is accepted only to exchange it for a browser session.
 - Encrypted storage for SSH, Cloudflare, and other provider credentials.
 - Audit records for account, server, and DNS activity.
 - MySQL-compatible managed database schema for users, sessions, servers, zones, links, and audit logs.
@@ -113,6 +113,41 @@ PORT=3000 NODE_ENV=production node --enable-source-maps artifacts/api-server/dis
 
 The unified service serves the built frontend, `/api` endpoints, `/api/healthz`, and `/manus-routes.json` from one listener.
 
+### Self-hosted VPS bootstrap
+
+For a fresh Ubuntu or Debian VPS, point the panel domain's DNS A/AAAA record at the server and allow inbound TCP 80/443 in the provider firewall. Clone this repository on the VPS and run the installer:
+
+```bash
+git clone https://github.com/lordeagle-tech/lord-eagle-cfdns-vps.git
+cd lord-eagle-cfdns-vps
+sudo bash scripts/install-self-hosted.sh
+```
+
+The installer prompts for the domain and certificate email, installs Node.js, MariaDB, Nginx, OpenSSH client and a Let's Encrypt certificate, builds the app, creates a local database, and generates a random admin login key and encryption key. It also creates a dedicated Ed25519 GitHub SSH key on the VPS and retrieves GitHub's SSH host keys through the HTTPS GitHub metadata API for strict host verification. The GitHub private key stays in `/var/lib/cfdns-manager/ssh/` with service-account-only permissions; the GitHub key setup API exposes only its public half. It binds the API to `127.0.0.1:3000` behind Nginx/TLS and runs it as the unprivileged `cfdns` service account. The initial login key is shown once and saved in `/root/cfdns-manager-credentials.txt` with root-only permissions. Keep it in a password manager, then remove that file.
+
+To connect that VPS to GitHub, sign in to the deployed panel and open **Developer Hub → VPS → GitHub Connection**. Copy the displayed public key, enter the target repository as `owner/repository`, then open its GitHub **Settings → Deploy keys** page and add the key. Keep the deploy key read-only unless this VPS must push to that repository. Return to the panel and run the test; it verifies both SSH authentication and read access to the selected repository. The GitHub key setup API returns only the public key; authorized local terminal commands run as the same service account and should be available only to trusted admins. On an existing manual installation, configure `CFDNS_ENABLE_GITHUB_SSH=true`, `GITHUB_SSH_KEY_PATH`, and `GITHUB_SSH_KNOWN_HOSTS`, ensure the service can write the configured key directory, and restart it before using the panel's generate-key fallback.
+
+The dashboard can inspect the VPS running the API without SSH-ing into itself. The local terminal and file manager run with the `cfdns` account's operating-system permissions; the installer deliberately does not grant a public web terminal root access. The local file browser is limited to `FILE_MANAGER_ROOTS` (the installer defaults to the app directory and `/var/www`). The service's private state directory, including its API-key file, and the dedicated GitHub private-key directory are outside those roots. This is an application path boundary, not a substitute for Linux permissions: terminal commands run as the service user and can access anything that user can access.
+
+The installer does not create Cloudflare API tokens or SSH credentials for other VPSs—add those separately in the panel with only the permissions required. On first SSH test, the app displays the host's SHA-256 fingerprint and runs no remote commands until you confirm it. Compare it with your VPS provider's console or the host public-key fingerprint on the VPS; never accept an unexpected change. After it is pinned, remote terminal and SFTP actions verify the same fingerprint on every connection. This is a one-time bootstrap for a fresh host; it refuses to overwrite an existing install or domain configuration.
+
+The API key and encryption key are distinct: protect both, and back up the encryption key with the database. The installer keeps its environment file root-only and stores the API key separately under `/var/lib/cfdns/.xcm_key` with service-account-only permissions. The systemd service runs unprivileged with a private filesystem view; writable paths are limited to the app directory, private service data, its dedicated GitHub SSH directory, and `/var/www`, subject to normal Linux permissions. Browser login exchanges the access key for a Secure, HttpOnly session cookie; ordinary API routes reject bearer API keys. In **Settings**, generate a replacement key (shown once) or revoke other browser sessions. Key rotation revokes other sessions while preserving the current browser. Keep `.env.example` as a template only—it contains placeholders, not deployment credentials.
+
+For additional login protection, set `ADMIN_IP_ALLOWLIST` in `/etc/cfdns-manager.env` to one or more exact client IP addresses separated by commas, then restart `cfdns-manager`. Leave it empty to disable this optional restriction. The allowlist uses the client address forwarded by the installer-managed Nginx proxy; do not expose the app port directly or trust forwarding headers from an untrusted proxy. Login attempts are rate-limited in MariaDB across restarts and app processes. Security headers, including a restrictive Content Security Policy, are sent by the application; validate any custom reverse proxy or external assets against that policy before adding exceptions.
+
+#### Back up and restore
+
+The installer includes root-only backup and restore scripts. A backup contains a compressed database plus the environment, optional rotated API-key file, and the dedicated GitHub SSH key material needed to preserve GitHub access and decrypt stored SSH/Cloudflare credentials. It is stored under `/var/backups/cfdns-manager` with mode `0600`; keep an encrypted copy off the VPS, because the secrets archive contains private keys and other sensitive material.
+
+```bash
+cd /opt/cfdns-manager
+sudo bash scripts/backup-self-hosted.sh
+ls -1 /var/backups/cfdns-manager
+sudo bash scripts/restore-self-hosted.sh 20261112T120000Z
+```
+
+Restore verifies the checksum, creates a fresh pre-restore backup, and requires you to type `RESTORE` before replacing the app configuration and database. Test the recovery procedure on a non-production copy before relying on it. Losing the encryption key without a compatible backup can make saved provider credentials unreadable.
+
 ## Project layout
 
 ```text
@@ -136,9 +171,17 @@ The unified service serves the built frontend, `/api` endpoints, `/api/healthz`,
 
 CFDNS Manager is an infrastructure tool. Treat it like production access:
 
+- Protected API routes require an administrator role and a browser session. OAuth accounts must be explicitly allowlisted with `ADMIN_EMAILS` or `ADMIN_OPEN_IDS`; the generated local access key is only a bootstrap/session-exchange credential, not a general API bearer token.
+- Configure `ADMIN_IP_ALLOWLIST` when the administrator's client IP is stable; values are exact IP addresses, comma-separated. Verify the client IP through the trusted reverse proxy before enabling it to avoid locking yourself out.
+- Sign-in attempts are rate-limited using MariaDB-backed state. The app fails closed for login if that protection store is unavailable.
+- Use Settings to rotate the generated access key and revoke other browser sessions. Save the one-time displayed key in a password manager; the current session remains active after rotation.
+- Set `APP_ORIGIN` to the exact HTTPS panel origin. CORS and cookie-authenticated writes use the configured origin; add only trusted extra origins to `APP_ALLOWED_ORIGINS`.
+- SSH host fingerprints are SHA-256 pinned only after user confirmation. If a host key changes, investigate first and deliberately re-pin it.
+- Use a dedicated, least-privilege SSH account and keep its Linux permissions narrow; remote terminal and SFTP access inherit that account's authority.
 - Use least-privilege Cloudflare tokens.
 - Use a dedicated SSH key per environment where practical.
 - Keep `APP_ENCRYPTION_KEY`, database credentials, and API keys outside Git.
+- Keep backups root-only, encrypt off-host copies, and periodically test restore.
 - Require explicit confirmation before destructive file and DNS operations.
 - Review audit records when investigating account or infrastructure changes.
 - Only connect servers and domains you own or are authorized to administer.

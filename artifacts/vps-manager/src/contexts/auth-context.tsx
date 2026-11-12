@@ -3,7 +3,6 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 const WELCOME_KEY = "xcm_welcome_shown";
 interface User { id: number; openId: string; email: string | null; name: string | null; role: string; }
 interface AuthContextValue {
-  apiKey: string | null;
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
@@ -15,31 +14,31 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [welcomeShown, setWelcomeShown] = useState<boolean>(() => sessionStorage.getItem(WELCOME_KEY) === "true");
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
       .then(async (res) => res.ok ? (await res.json()).user as User : null)
-      .then((next) => setUser(next))
+      .then((next) => setUser(next?.role === "admin" ? next : null))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
   const login = useCallback(async (key: string, options?: { onVerified?: () => void }) => {
     try {
-      const res = await fetch("/api/auth/verify", { credentials: "include", headers: { Authorization: `Bearer ${key}` } });
+      const res = await fetch("/api/auth/key-login", { method: "POST", credentials: "include", headers: { Authorization: `Bearer ${key}` } });
       if (!res.ok) { const body = await res.json().catch(() => ({})); return { ok: false, error: body?.error ?? "Invalid access key" }; }
       const body = await res.json();
+      await new Promise((resolve) => setTimeout(resolve, 1400));
       options?.onVerified?.();
-      await new Promise((resolve) => setTimeout(resolve, 760));
-      setUser(body.user as User); setApiKey(key); return { ok: true };
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setUser(body.user as User); return { ok: true };
     } catch { return { ok: false, error: "Cannot reach the service" }; }
   }, []);
   const logout = useCallback(() => {
     void fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    setUser(null); setApiKey(null);
+    setUser(null);
   }, []);
   const dismissWelcome = useCallback(() => { sessionStorage.setItem(WELCOME_KEY, "true"); setWelcomeShown(true); }, []);
-  return <AuthContext.Provider value={{ apiKey, user, loading, isAuthenticated: !!user, welcomeShown, login, logout, dismissWelcome }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, welcomeShown, login, logout, dismissWelcome }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() { const ctx = useContext(AuthContext); if (!ctx) throw new Error("useAuth must be used within AuthProvider"); return ctx; }

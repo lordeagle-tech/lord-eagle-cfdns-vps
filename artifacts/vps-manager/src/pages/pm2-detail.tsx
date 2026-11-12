@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { Footer } from "@/components/footer";
-import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +62,6 @@ type LogTab = "combined" | "stdout" | "stderr";
 export default function Pm2DetailPage() {
   const { name } = useParams<{ name: string }>();
   const [, navigate] = useLocation();
-  const { apiKey } = useAuth();
   const { toast } = useToast();
 
   const [proc, setProc] = useState<Pm2Detail | null>(null);
@@ -83,7 +81,7 @@ export default function Pm2DetailPage() {
   interface GitInfo { isGit: boolean; gitRoot?: string; branch?: string; remote?: string; lastCommit?: { hash: string; subject: string; author: string; ago: string }; dirty?: boolean; changedFiles?: number; }
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
 
-  const headers: Record<string, string> = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+  const headers: Record<string, string> = {};
 
   const fetchProc = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -93,7 +91,7 @@ export default function Pm2DetailPage() {
       else if (res.status === 404) navigate("/");
     } catch { /* ignore */ }
     setLoading(false);
-  }, [name, apiKey]);
+  }, [name]);
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -101,7 +99,7 @@ export default function Pm2DetailPage() {
       if (res.ok) setLogs(await res.json());
     } catch { /* ignore */ }
     setLogsLoading(false);
-  }, [name, apiKey]);
+  }, [name]);
 
   useEffect(() => {
     fetchProc();

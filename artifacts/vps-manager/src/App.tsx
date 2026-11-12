@@ -14,6 +14,9 @@ import TermsPage from "@/pages/terms";
 import Pm2DetailPage from "@/pages/pm2-detail";
 import SettingsPage from "@/pages/settings";
 import DnsPage from "@/pages/dns";
+import ConnectionsPage from "@/pages/connections";
+import RemoteTerminalPage from "@/pages/remote-terminal";
+import RemoteFilesPage from "@/pages/remote-files";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -39,7 +42,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#0b0b0c" }}>
+    <div className="dashboard-theme flex flex-col overflow-hidden" style={{ height: "100dvh" }}>
       <Navbar />
       <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {children}
@@ -94,6 +97,18 @@ function AppRoutes() {
 
       <Route path="/dns">
         <ProtectedLayout><DnsPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/connections">
+        <ProtectedLayout><ConnectionsPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/connections/:id/terminal">
+        <ProtectedLayout><RemoteTerminalPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/connections/:id/files">
+        <ProtectedLayout><RemoteFilesPage /></ProtectedLayout>
       </Route>
 
       <Route path="/settings">

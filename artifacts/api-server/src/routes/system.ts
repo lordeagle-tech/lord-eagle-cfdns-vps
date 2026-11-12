@@ -96,8 +96,7 @@ router.get("/system/info", async (_req, res) => {
       loggedUsers,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to get system info";
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: "Failed to get system info" });
   }
 });
 
@@ -233,28 +232,28 @@ router.get("/system/pm2/:name/logs", (req, res) => {
 router.post("/system/pm2/:name/restart", (req, res) => {
   const name = req.params.name;
   exec(`pm2 flush "${name}" 2>&1 && pm2 restart "${name}" 2>&1`, { timeout: 20000 }, (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message, output: stdout });
+    if (err) return res.status(500).json({ error: "Process operation failed" });
     res.json({ ok: true, output: stdout.trim() });
   });
 });
 
 router.post("/system/pm2/:name/stop", (req, res) => {
   exec(`pm2 stop "${req.params.name}" 2>&1`, { timeout: 10000 }, (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message, output: stdout });
+    if (err) return res.status(500).json({ error: "Process operation failed" });
     res.json({ ok: true, output: stdout.trim() });
   });
 });
 
 router.post("/system/pm2/:name/start", (req, res) => {
   exec(`pm2 start "${req.params.name}" 2>&1`, { timeout: 10000 }, (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message, output: stdout });
+    if (err) return res.status(500).json({ error: "Process operation failed" });
     res.json({ ok: true, output: stdout.trim() });
   });
 });
 
 router.post("/system/pm2/:name/flush", (req, res) => {
   exec(`pm2 flush "${req.params.name}" 2>&1`, { timeout: 10000 }, (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message, output: stdout });
+    if (err) return res.status(500).json({ error: "Process operation failed" });
     res.json({ ok: true, output: stdout.trim() });
   });
 });
@@ -417,7 +416,7 @@ router.get("/system/git-info", (req, res) => {
 
     res.json({ isGit: true, gitRoot, branch, remote, lastCommit: { hash, subject, author, ago }, dirty, changedFiles });
   } catch (err) {
-    res.json({ isGit: false, error: String(err) });
+    res.json({ isGit: false, error: "Repository status unavailable" });
   }
 });
 
@@ -546,33 +545,6 @@ router.get("/system/sites", (_req, res) => {
   Promise.all(checks).then(() => res.json({ sites }));
 });
 
-router.get("/system/github-ssh", (_req, res) => {
-  const sshDir = "/root/.ssh";
-  const keyTypes = ["id_ed25519", "id_rsa", "id_ecdsa", "id_dsa"];
-  const keys: { type: string; publicKey: string; fingerprint: string }[] = [];
-
-  for (const keyType of keyTypes) {
-    const pubPath = path.join(sshDir, `${keyType}.pub`);
-    const privPath = path.join(sshDir, keyType);
-    if (fs.existsSync(pubPath) && fs.existsSync(privPath)) {
-      const publicKey = (() => { try { return fs.readFileSync(pubPath, "utf8").trim(); } catch { return ""; } })();
-      const fingerprint = run(`ssh-keygen -lf "${pubPath}" 2>/dev/null | awk '{print $2}'`);
-      if (publicKey) keys.push({ type: keyType, publicKey, fingerprint });
-    }
-  }
-
-  exec(
-    `ssh -T git@github.com -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=8 2>&1`,
-    { timeout: 12000 },
-    (_, stdout) => {
-      const out = (stdout ?? "").trim();
-      const connected = out.includes("successfully authenticated") || /^Hi .+!/.test(out);
-      const authUser = out.match(/Hi (.+?)!/)?.[1] ?? null;
-      res.json({ keys, connected, authUser, sshTestOutput: out });
-    }
-  );
-});
-
 router.post("/system/git-pull", (req, res) => {
   const { dir } = req.body as { dir?: string };
   if (!dir) return res.status(400).json({ error: "dir is required" });
@@ -618,7 +590,7 @@ router.post("/system/git-pull", (req, res) => {
     (err, stdout) => {
       const output = stdout?.trim() ?? "";
       if (err && !output) {
-        return res.status(500).json({ ok: false, error: err.message, output: "" });
+        return res.status(500).json({ ok: false, error: "Repository synchronization failed" });
       }
       res.json({ ok: !err, output, gitRoot });
     }
@@ -628,7 +600,7 @@ router.post("/system/git-pull", (req, res) => {
 router.post("/system/clear-cache", (_req, res) => {
   exec("sync", (syncErr) => {
     if (syncErr) {
-      return res.status(500).json({ error: "sync failed: " + syncErr.message });
+      return res.status(500).json({ error: "System sync failed" });
     }
     exec("echo 3 > /proc/sys/vm/drop_caches", (cacheErr) => {
       if (cacheErr) {
