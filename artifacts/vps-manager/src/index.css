@@ -200,6 +200,7 @@
     --dashboard-line: rgba(245, 181, 91, .22);
     --dashboard-amber: #f5b65b;
     --dashboard-amber-soft: #ffd28a;
+    --dashboard-cyan: #63d6e8;
     --background: 220 14% 6%;
     --foreground: 40 18% 93%;
     --card: 220 12% 10%;
@@ -235,12 +236,12 @@
     accent-color: var(--dashboard-amber);
   }
   .dashboard-theme .ops-panel {
-    background: linear-gradient(145deg, rgba(34,38,43,.98), rgba(21,24,28,.98));
+    background-image: radial-gradient(ellipse 90% 75% at 100% 0%, rgba(99,214,232,.12), transparent 68%), linear-gradient(145deg, rgba(34,38,43,.98), rgba(21,24,28,.98)) !important;
     border-color: var(--dashboard-line);
     box-shadow: 0 14px 38px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035);
   }
-  .dashboard-theme .loop-surface { background: linear-gradient(145deg, rgba(29,33,38,.96), rgba(19,22,26,.96)); border: 1px solid var(--dashboard-line); border-radius: 20px; }
-  .dashboard-theme .loop-surface-strong { background: linear-gradient(145deg, rgba(39,43,49,.98), rgba(25,29,34,.98)); border: 1px solid rgba(245,181,91,.34); border-radius: 20px; }
+  .dashboard-theme .loop-surface { background: linear-gradient(145deg, rgba(29,38,42,.97), rgba(19,24,28,.97)); border: 1px solid rgba(99,214,232,.19); border-radius: 20px; }
+  .dashboard-theme .loop-surface-strong { background: linear-gradient(145deg, rgba(39,48,53,.98), rgba(25,31,35,.98)); border: 1px solid rgba(99,214,232,.28); border-radius: 20px; box-shadow: inset 0 1px rgba(99,214,232,.1), 0 12px 32px rgba(0,0,0,.2); }
   .dashboard-theme .loop-accent { color: var(--dashboard-amber); }
   .dashboard-theme .loop-label { color: #c0b29c; font-family: var(--app-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
   .dashboard-theme .ops-kicker { color: var(--dashboard-amber); }
