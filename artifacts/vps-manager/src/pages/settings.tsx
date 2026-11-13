@@ -65,6 +65,10 @@ export default function SettingsPage() {
     }
   }
 
+  function readableAction(action: string) {
+    return action.split(/[._]/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" · ");
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full space-y-6">
@@ -91,15 +95,34 @@ export default function SettingsPage() {
           <Button variant="outline" disabled={busy} onClick={revokeOtherSessions}>Revoke other sessions</Button>
         </section>
 
-        <section className="rounded-2xl border p-5 space-y-3 bg-white/[.02] border-white/10">
-          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-300" /><span className="text-sm font-semibold">Recent security and operations activity</span></div>
-          <p className="text-xs text-muted-foreground">Latest 20 recorded actions. Sensitive event metadata is deliberately not shown here.</p>
-          {auditEntries.length ? <div className="divide-y divide-white/5">
-            {auditEntries.map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
-              <span className="font-medium">{entry.action} <span className="text-muted-foreground">· {entry.targetType}{entry.targetId ? ` ${entry.targetId}` : ""}</span></span>
-              <span className="text-muted-foreground">{entry.status} · {new Date(entry.createdAt).toLocaleString()}</span>
-            </div>)}
-          </div> : <p className="text-xs text-muted-foreground">No recent audit entries are available.</p>}
+        <section className="rounded-2xl border p-5 space-y-4 bg-white/[.02] border-white/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-300" /><span className="text-sm font-semibold">Security activity timeline</span></div>
+            <span className="rounded-full border border-white/10 bg-white/[.03] px-2 py-1 text-[10px] text-muted-foreground">{auditEntries.length} recent</span>
+          </div>
+          <p className="text-xs text-muted-foreground">Latest 20 recorded actions, newest first. Sensitive event metadata is deliberately omitted.</p>
+          {auditEntries.length ? <ol className="relative ml-2 border-l border-amber-200/15 pl-5">
+            {auditEntries.map((entry) => {
+              const succeeded = entry.status === "success";
+              return <li key={entry.id} className="relative pb-4 last:pb-0">
+                <span className="absolute -left-[25px] top-1 flex h-3 w-3 items-center justify-center rounded-full border"
+                  style={{ background: succeeded ? "rgba(125,200,140,.16)" : "rgba(248,113,113,.14)", borderColor: succeeded ? "rgba(125,200,140,.4)" : "rgba(248,113,113,.42)", boxShadow: `0 0 12px ${succeeded ? "rgba(125,200,140,.11)" : "rgba(248,113,113,.1)"}` }}>
+                  <span className="h-1 w-1 rounded-full" style={{ background: succeeded ? "#a9d8b0" : "#f2aaa5" }} />
+                </span>
+                <div className="flex flex-col gap-2 rounded-xl border border-white/[.055] bg-black/[.12] p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-foreground/90">{readableAction(entry.action)}</div>
+                    <div className="mt-1 truncate text-[10px] text-muted-foreground">{entry.targetType.replaceAll("_", " ")}{entry.targetId ? ` · ${entry.targetId}` : ""}</div>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
+                    <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                      style={{ color: succeeded ? "#a9d8b0" : "#f2aaa5", background: succeeded ? "rgba(125,200,140,.08)" : "rgba(248,113,113,.08)" }}>{entry.status}</span>
+                    <time className="text-[10px] text-muted-foreground/55" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleString()}</time>
+                  </div>
+                </div>
+              </li>;
+            })}
+          </ol> : <p className="text-xs text-muted-foreground">No recent audit entries are available.</p>}
         </section>
 
         <section className="rounded-2xl border p-5 space-y-3 border-destructive/20 bg-destructive/[.03]">

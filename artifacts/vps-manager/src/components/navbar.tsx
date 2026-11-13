@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import {
   Home, FolderOpen, Terminal, Code2, Globe2, Server,
-  Github, Send, Instagram, HeadphonesIcon, LogOut, Menu, X, Settings,
+  Github, Send, Instagram, HeadphonesIcon, LogOut, Menu, X, Settings, CloudUpload, ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -13,6 +13,9 @@ const NAV_LINKS = [
   { href: "/terminal", label: "Terminal", icon: Terminal },
   { href: "/dev", label: "Dev", icon: Code2 },
   { href: "/connections", label: "Connections", icon: Server },
+  { href: "/github-control", label: "GitHub Control", icon: Github },
+  { href: "/deploy-script", label: "Deploy Script", icon: CloudUpload },
+  { href: "/firewall", label: "Firewall", icon: ShieldCheck },
   { href: "/dns", label: "DNS", icon: Globe2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

@@ -20,6 +20,7 @@ export async function ensureDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS site_links (id INT AUTO_INCREMENT PRIMARY KEY, owner_id INT NOT NULL, server_id INT NOT NULL, zone_id INT NOT NULL, hostname VARCHAR(255) NOT NULL, port INT NOT NULL, proxied BOOLEAN NOT NULL DEFAULT FALSE, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY site_link_unique (owner_id, hostname), INDEX site_links_server_idx (server_id))`,
     `CREATE TABLE IF NOT EXISTS audit_logs (id INT AUTO_INCREMENT PRIMARY KEY, owner_id INT NOT NULL, action VARCHAR(128) NOT NULL, target_type VARCHAR(64) NOT NULL, target_id VARCHAR(191), status VARCHAR(32) NOT NULL, metadata TEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX audit_owner_idx (owner_id), INDEX audit_created_idx (created_at))`,
     `CREATE TABLE IF NOT EXISTS auth_rate_limits (bucket_key VARCHAR(191) PRIMARY KEY, window_started_at DATETIME NOT NULL, attempts INT NOT NULL DEFAULT 0, blocked_until DATETIME NULL, INDEX auth_rate_expiry_idx (window_started_at))`,
+    `CREATE TABLE IF NOT EXISTS github_account_connections (owner_id INT NOT NULL PRIMARY KEY, token_encrypted TEXT NOT NULL, username VARCHAR(191) NOT NULL, scopes VARCHAR(512) NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`,
   ];
   for (const statement of statements) await pool.query(statement);
   for (const column of ["host_fingerprint", "pending_host_fingerprint"]) {

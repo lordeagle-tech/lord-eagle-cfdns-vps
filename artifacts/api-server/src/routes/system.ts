@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { execSync, exec, spawn } from "child_process";
+import { execSync, exec, execFileSync, spawn } from "child_process";
 import os from "os";
 import fs from "fs";
 import path from "path";
@@ -214,11 +214,12 @@ router.get("/system/pm2/:name/logs", (req, res) => {
       const env = (proc.pm2_env ?? {}) as Record<string, unknown>;
       const outLog = (env.pm_out_log_path as string) ?? "";
       const errLog = (env.pm_err_log_path as string) ?? "";
-      const lines = parseInt(req.query.lines as string) || 80;
+      const requestedLines = Number.parseInt(String(req.query.lines ?? "100"), 10);
+      const lines = Number.isFinite(requestedLines) ? Math.max(25, Math.min(requestedLines, 500)) : 100;
       const readLog = (file: string): string[] => {
         if (!file || !fs.existsSync(file)) return [];
         try {
-          return execSync(`tail -n ${lines} "${file}" 2>/dev/null`, { timeout: 3000, encoding: "utf8" })
+          return execFileSync("tail", ["-n", String(lines), "--", file], { timeout: 3000, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
             .split("\n").filter(Boolean);
         } catch { return []; }
       };

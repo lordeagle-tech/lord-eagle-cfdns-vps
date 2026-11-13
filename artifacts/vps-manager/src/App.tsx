@@ -17,6 +17,9 @@ import DnsPage from "@/pages/dns";
 import ConnectionsPage from "@/pages/connections";
 import RemoteTerminalPage from "@/pages/remote-terminal";
 import RemoteFilesPage from "@/pages/remote-files";
+import GithubControlPage from "@/pages/github-control";
+import DeployScriptPage from "@/pages/deploy-script";
+import FirewallPage from "@/pages/firewall";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -101,6 +104,18 @@ function AppRoutes() {
 
       <Route path="/connections">
         <ProtectedLayout><ConnectionsPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/github-control">
+        <ProtectedLayout><GithubControlPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/deploy-script">
+        <ProtectedLayout><DeployScriptPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/firewall">
+        <ProtectedLayout><FirewallPage /></ProtectedLayout>
       </Route>
 
       <Route path="/connections/:id/terminal">

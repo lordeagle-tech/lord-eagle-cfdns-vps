@@ -35,6 +35,7 @@ export async function getServerById(id: number, ownerId: number): Promise<Server
   if (!server) return null;
   return {
     ...server,
+    name: server.name,
     password: decryptSecret(server.password),
     privateKey: decryptSecret(server.privateKey),
     passphrase: decryptSecret(server.passphrase),

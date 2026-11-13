@@ -12,6 +12,7 @@ type Resolver = { resolver: string; status: "answer" | "no-answer" | "error"; an
 type HistoryEntry = { id: number; action: string; recordId: string | null; status: string; createdAt: string; before: RecordItem | null; after: RecordItem | null; rollbackable: boolean };
 type PreviewChange = { operation: "create" | "update"; before: RecordItem | null; after: RecordItem };
 type ImportPreview = { previewToken: string; totalRecords: number; ignoredApexNsCount: number; warnings: string[]; createCount: number; updateCount: number; unchangedCount: number; changes: PreviewChange[] };
+type CloudflareSecurity = { zoneId: number; zoneName: string; securityLevel: string; editable: boolean };
 
 async function request(path: string, options: RequestInit = {}) {
   const response = await fetch(path, { ...options, credentials: "include", cache: "no-store", headers: { "content-type": "application/json", ...(options.headers ?? {}) } });
@@ -51,6 +52,8 @@ export default function DnsPage() {
   const [propagationType, setPropagationType] = useState("A");
   const [resolverResults, setResolverResults] = useState<Resolver[] | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [security, setSecurity] = useState<CloudflareSecurity | null>(null);
+  const [securityBusy, setSecurityBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -62,11 +65,14 @@ export default function DnsPage() {
         const [r, h] = await Promise.all([request(`/api/dns/zones/${zoneId}/records`), request(`/api/dns/zones/${zoneId}/history?limit=50`)]);
         setRecords(r);
         setHistory(h.entries ?? []);
+        try { setSecurity(await request(`/api/dns/zones/${zoneId}/security`)); }
+        catch { setSecurity(null); }
         const selected = z.find((item: Zone) => String(item.id) === String(zoneId));
         if (selected && !propagationName) setPropagationName(selected.zoneName);
       } else {
         setRecords([]);
         setHistory([]);
+        setSecurity(null);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to load DNS data");
@@ -174,6 +180,19 @@ export default function DnsPage() {
     catch (error) { setMessage(error instanceof Error ? error.message : "Health check failed"); }
     finally { setBusy(false); }
   }
+  async function toggleUnderAttack(enabled: boolean) {
+    if (!zoneId || !selectedZone) return;
+    const expected = enabled ? `ENABLE UNDER ATTACK MODE FOR ${selectedZone.zoneName}` : `RESTORE SECURITY LEVEL FOR ${selectedZone.zoneName}`;
+    const typed = window.prompt(`${enabled ? "Under Attack Mode adds an interstitial browser challenge to help mitigate Layer 7 attacks. Use only during an active attack; it can affect APIs, bots, analytics, and legitimate visitors." : "This restores the security level recorded before Under Attack Mode was enabled (or medium if no valid prior level is available)."}\n\nType exactly to continue:\n${expected}`);
+    if (typed !== expected) return;
+    setSecurityBusy(true);
+    try {
+      const result = await request(`/api/dns/zones/${zoneId}/security/under-attack`, { method: "PATCH", body: JSON.stringify({ enabled, confirmation: selectedZone.zoneName }) });
+      setSecurity({ zoneId: Number(zoneId), zoneName: selectedZone.zoneName, securityLevel: result.securityLevel, editable: true });
+      setMessage(result.enabled ? "Under Attack Mode enabled. Restore the previous level when the attack ends." : `Under Attack Mode disabled; restored level: ${result.securityLevel}.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not update Cloudflare security"); }
+    finally { setSecurityBusy(false); }
+  }
   async function runPropagation(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setResolverResults(null);
     try { const result = await request(`/api/dns/zones/${zoneId}/propagation`, { method: "POST", body: JSON.stringify({ name: propagationName, type: propagationType }) }); setResolverResults(result.results); }
@@ -195,12 +214,14 @@ export default function DnsPage() {
 
     {!zoneId ? <>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <section className={card}><div className="mb-3 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-amber-200" /><h2 className="font-bold">Connect Cloudflare</h2></div><p className="mb-4 text-xs text-muted-foreground">Create a token limited to the zones you need. The app verifies Zone:Read and encrypts the token at rest. Add DNS:Edit for changes; permissions are not inferred from a token label.</p><form onSubmit={addConnection} className="space-y-3"><Input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="Connection name" /><Input className={fieldClass} value={apiToken} onChange={(event) => setApiToken(event.target.value)} type="password" autoComplete="new-password" placeholder="Cloudflare API token" required /><Button className="w-full" type="submit" disabled={busy}><Plus className="mr-2 h-4 w-4" />Verify and save</Button></form></section>
+        <section className={card}><div className="mb-3 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-amber-200" /><h2 className="font-bold">Connect Cloudflare</h2></div><p className="mb-4 text-xs text-muted-foreground">Create a token limited to the zones you need. The app verifies Zone:Read and encrypts the token at rest. Add DNS:Edit for record changes. Add Zone Settings:Read to see the security level and Zone Settings:Edit only if you want the emergency Under Attack Mode control. Permissions are not inferred from a token label.</p><form onSubmit={addConnection} className="space-y-3"><Input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="Connection name" /><Input className={fieldClass} value={apiToken} onChange={(event) => setApiToken(event.target.value)} type="password" autoComplete="new-password" placeholder="Cloudflare API token" required /><Button className="w-full" type="submit" disabled={busy}><Plus className="mr-2 h-4 w-4" />Verify and save</Button></form></section>
         <section className={card}><div className="mb-4 flex items-center gap-2"><Globe2 className="h-4 w-4 text-amber-200" /><h2 className="font-bold">Zones visible to these tokens</h2></div>{zones.length === 0 ? <p className="text-sm text-muted-foreground">No synced zones yet. Sync a connection to list the zones its token can see.</p> : <div className="space-y-2">{zones.map((zone) => <div key={zone.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-white/[.02] px-3 py-3"><div className="min-w-0 flex-1"><Link href={`/dns/zones/${zone.id}`} className="font-mono text-sm hover:text-amber-200">{zone.zoneName}</Link><div className="text-[11px] text-muted-foreground">{zone.status} · connection {zone.connectionId}</div></div><Button size="sm" variant="outline" disabled={busy} onClick={() => void sync(zone.connectionId)}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Sync</Button></div>)}</div>}</section>
       </div>
       <section className={card}><h2 className="mb-4 font-bold">Saved Cloudflare credentials</h2>{connections.length === 0 ? <p className="text-sm text-muted-foreground">No Cloudflare connections yet.</p> : <div className="grid gap-3 xl:grid-cols-2">{connections.map((connection) => <div key={connection.id} className="space-y-3 rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold">{connection.name}</div><div className="mt-1 text-xs text-muted-foreground">Secret encrypted · {connection.accessibleZoneCount ?? 0} visible zone(s)</div><div className="mt-1 break-words text-xs text-amber-100/80">{connection.visibleZones?.length ? connection.visibleZones.join(", ") : "No zone scope synced yet"}</div></div><Button size="sm" variant="outline" disabled={busy} onClick={() => void sync(connection.id)}>Refresh scope</Button></div><div className="flex flex-col gap-2 sm:flex-row"><Input type="password" autoComplete="new-password" placeholder="Replacement token" value={rotationTokens[connection.id] ?? ""} onChange={(event) => setRotationTokens((items) => ({ ...items, [connection.id]: event.target.value }))} /><Button disabled={busy || !(rotationTokens[connection.id] ?? "").trim()} onClick={() => void rotateToken(connection.id)}>Rotate token</Button></div></div>)}</div>}</section>
     </> : <>
       <div className="flex flex-wrap items-center gap-3"><Button variant="ghost" asChild><Link href="/dns"><ArrowLeft className="mr-2 h-4 w-4" />All zones</Link></Button><div><h2 className="text-xl font-bold">{selectedZone?.zoneName ?? "Zone"}</h2><p className="text-xs text-muted-foreground">Live Cloudflare records · registrar nameservers are managed at your registrar/Cloudflare account, not by this page</p></div></div>
+
+      <section className={`${card} ${security?.securityLevel === "under_attack" ? "border-red-400/40 bg-red-950/20" : ""}`}><div className="flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><div className="mb-2 flex items-center gap-2"><ShieldAlert className={`h-4 w-4 ${security?.securityLevel === "under_attack" ? "text-red-300" : "text-amber-200"}`} /><h3 className="font-bold">Cloudflare attack protection</h3></div><p className="text-xs leading-relaxed text-muted-foreground">Cloudflare automatically mitigates DDoS attacks across its network. Under Attack Mode is an emergency Layer 7 challenge—not a firewall or guaranteed fix—and may disrupt APIs, bots, analytics, and legitimate visitors. Use only during an active attack, then restore the prior level.</p>{security ? <p className="mt-3 text-sm">Current security level: <b className={security.securityLevel === "under_attack" ? "text-red-200" : "text-amber-100"}>{security.securityLevel.replaceAll("_", " ")}</b>{!security.editable && <span className="ml-2 text-xs text-muted-foreground">(read-only for this zone/token/plan)</span>}</p> : <p className="mt-3 text-xs text-amber-100/80">Security setting status unavailable. The token may need Zone Settings:Read.</p>}</div><Button variant={security?.securityLevel === "under_attack" ? "outline" : "destructive"} disabled={!security || !security.editable || securityBusy || import.meta.env.DEV} onClick={() => void toggleUnderAttack(security?.securityLevel !== "under_attack")}>{securityBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : security?.securityLevel === "under_attack" ? <ShieldCheck className="mr-2 h-4 w-4" /> : <ShieldAlert className="mr-2 h-4 w-4" />}{security?.securityLevel === "under_attack" ? "Restore previous level" : "Enable Under Attack"}</Button></div>{import.meta.env.DEV && <p className="mt-3 text-xs text-amber-100/80">Shared Preview — Cloudflare setting changes are disabled. Add tokens only on your own deployed HTTPS instance.</p>}</section>
 
       <section className={card}><h3 className="mb-4 font-bold">Add a DNS record</h3><form onSubmit={addRecord} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7"><select value={recordType} onChange={(event) => setRecordType(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option>A</option><option>AAAA</option><option>CNAME</option><option>TXT</option><option>MX</option><option>NS</option></select><Input value={recordName} onChange={(event) => setRecordName(event.target.value)} placeholder="Name (www or @)" required /><Input value={recordContent} onChange={(event) => setRecordContent(event.target.value)} placeholder="Content / target" required />{recordType === "MX" && <Input type="number" min="0" max="65535" value={recordPriority} onChange={(event) => setRecordPriority(event.target.value)} aria-label="MX priority" placeholder="Priority" />}<select value={recordTtl} onChange={(event) => setRecordTtl(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="1">TTL: Auto</option><option value="60">TTL: 1 minute</option><option value="300">TTL: 5 minutes</option><option value="3600">TTL: 1 hour</option><option value="14400">TTL: 4 hours</option></select><Button type="submit" disabled={busy}><Plus className="mr-2 h-4 w-4" />Add</Button><button type="button" onClick={() => setProxied((value) => !value)} className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2 lg:col-span-7">{proxied ? <ToggleRight className="h-5 w-5 text-amber-200" /> : <ToggleLeft className="h-5 w-5" />}Cloudflare proxy default {proxied ? "enabled" : "disabled"} (applies only to A/AAAA/CNAME)</button></form>
         <div className="mt-4 flex flex-wrap gap-2 border-t border-white/5 pt-4"><Button size="sm" variant="outline" onClick={() => void exportZone("csv")}><ArrowDownToLine className="mr-2 h-4 w-4" />Export CSV</Button><Button size="sm" variant="outline" onClick={() => void exportZone("bind")}><ArrowDownToLine className="mr-2 h-4 w-4" />Export BIND</Button><Button size="sm" variant="outline" onClick={() => { setPreview(null); document.getElementById("dns-import")?.scrollIntoView({ behavior: "smooth" }); }}><ArrowUpFromLine className="mr-2 h-4 w-4" />Import zone data</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void runHealth()}><Wrench className="mr-2 h-4 w-4" />Run health check</Button></div>

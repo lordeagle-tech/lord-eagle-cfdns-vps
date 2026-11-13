@@ -9,7 +9,7 @@ import {
   Cpu, MemoryStick, HardDrive, Activity, Clock,
   Server, RefreshCw, FolderOpen, Search, Trash2,
   Network, Users, Terminal, Layers, CheckCircle2, XCircle, AlertCircle,
-  GitBranch, ExternalLink, ChevronRight, Globe, ShieldCheck, ShieldX, KeyRound,
+  GitBranch, ExternalLink, ChevronRight, Globe, ShieldCheck, ShieldX, KeyRound, AlertTriangle, History, ArrowUpRight,
   ArrowDownToLine, Loader2,
 } from "lucide-react";
 
@@ -59,6 +59,15 @@ interface Pm2Process {
   cwd: string;
   watch: boolean;
   nodeVersion: string;
+}
+
+interface AuditEntry {
+  id: number;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  status: string;
+  createdAt: string;
 }
 
 function fmtBytes(b: number) {
@@ -136,6 +145,8 @@ export default function HomePage() {
   const [sitesLoading, setSitesLoading] = useState(true);
   const [githubSsh, setGithubSsh] = useState<{ enabled: boolean; configured: boolean; tested: boolean; connected: boolean; authUser: string | null; keys: { type: string }[] } | null>(null);
   const [githubSshLoading, setGithubSshLoading] = useState(true);
+  const [dnsAudit, setDnsAudit] = useState<AuditEntry[]>([]);
+  const [dnsAuditLoading, setDnsAuditLoading] = useState(true);
 
   const authHeaders: Record<string, string> = {};
 
@@ -214,15 +225,32 @@ export default function HomePage() {
     setGithubSshLoading(false);
   }, []);
 
+  const fetchDnsAudit = useCallback(async () => {
+    try {
+      const res = await fetch("/api/audit/logs?limit=100", { credentials: "include", cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json() as { entries?: AuditEntry[] };
+        setDnsAudit((data.entries ?? []).filter((entry) => entry.action.startsWith("dns.record.") || entry.action.startsWith("dns.import.")));
+      }
+    } catch { /* optional dashboard summary */ }
+    setDnsAuditLoading(false);
+  }, []);
+
   useEffect(() => {
     fetchInfo(false);
     fetchPm2();
     fetchGit();
     fetchSites();
     fetchGithubSsh();
+    fetchDnsAudit();
     const interval = setInterval(() => { fetchInfo(true); fetchPm2(); }, 15000);
     return () => clearInterval(interval);
-  }, [fetchInfo, fetchPm2, fetchGit, fetchSites, fetchGithubSsh]);
+  }, [fetchInfo, fetchPm2, fetchGit, fetchSites, fetchGithubSsh, fetchDnsAudit]);
+
+  useEffect(() => {
+    const auditInterval = setInterval(fetchDnsAudit, 60000);
+    return () => clearInterval(auditInterval);
+  }, [fetchDnsAudit]);
 
   async function clearCache() {
     setClearing(true);
@@ -250,6 +278,22 @@ export default function HomePage() {
   const mainDisk = info?.disk.find((d) => d.mountedOn === "/") ?? info?.disk[0];
   const diskPct = mainDisk ? parseFloat(mainDisk.usePercent) : 0;
   const cpuLoad = info ? parseFloat(info.cpu.loadAvg["1m"]) / info.cpu.cores * 100 : 0;
+  const resourceReadings = info ? [
+    { label: "CPU load", value: cpuLoad, detail: `${cpuLoad.toFixed(1)}% of available cores` },
+    { label: "Memory", value: memPct, detail: `${memPct.toFixed(1)}% used` },
+    { label: `Disk${mainDisk?.mountedOn ? ` · ${mainDisk.mountedOn}` : ""}`, value: diskPct, detail: `${diskPct.toFixed(1)}% used` },
+  ] : [];
+  const resourceAlerts = resourceReadings.filter((reading) => reading.value >= 80);
+  const recentDnsChanges = dnsAudit.slice(0, 5);
+
+  function dnsActionLabel(action: string) {
+    if (action === "dns.import.apply") return "Bulk import applied";
+    if (action === "dns.import.preview") return "Import preview";
+    if (action.endsWith(".create")) return "DNS record created";
+    if (action.endsWith(".update")) return "DNS record updated";
+    if (action.endsWith(".delete")) return "DNS record deleted";
+    return "DNS change";
+  }
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "#0e1012" }}>
@@ -407,6 +451,48 @@ export default function HomePage() {
             />
           </div>
         )}
+
+        {/* Resource alerts and recent DNS activity */}
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="ops-panel rounded-2xl p-5" style={{ background: "#15181b", border: `1px solid ${resourceAlerts.some((reading) => reading.value >= 90) ? "rgba(248,113,113,.28)" : resourceAlerts.length ? "rgba(230,173,104,.24)" : "rgba(230,173,104,.14)"}` }}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" style={{ color: resourceAlerts.length ? (resourceAlerts.some((reading) => reading.value >= 90) ? "#f87171" : "#e6ad68") : "#9cc9a2" }} />
+                <h2 className="text-sm font-bold text-foreground">Resource alerts</h2>
+              </div>
+              <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: resourceAlerts.length ? (resourceAlerts.some((reading) => reading.value >= 90) ? "#f2aaa5" : "#f0c58f") : "#a9d8b0", background: resourceAlerts.length ? (resourceAlerts.some((reading) => reading.value >= 90) ? "rgba(248,113,113,.08)" : "rgba(230,173,104,.08)") : "rgba(125,200,140,.08)" }}>
+                {loading ? "Checking…" : resourceAlerts.length ? `${resourceAlerts.length} active` : "All clear"}
+              </span>
+            </div>
+            {resourceAlerts.length ? <div className="space-y-2">
+              {resourceAlerts.map((reading) => {
+                const critical = reading.value >= 90;
+                return <div key={reading.label} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5" style={{ background: critical ? "rgba(248,113,113,.055)" : "rgba(230,173,104,.045)", border: `1px solid ${critical ? "rgba(248,113,113,.12)" : "rgba(230,173,104,.11)"}` }}>
+                  <div className="min-w-0"><div className="text-xs font-semibold text-foreground">{reading.label} · {critical ? "Critical" : "Warning"}</div><div className="mt-0.5 text-[10px] text-muted-foreground">{reading.detail} · threshold {critical ? "90%" : "80%"}</div></div>
+                  <div className="font-mono text-sm font-bold" style={{ color: critical ? "#f2aaa5" : "#f0c58f" }}>{reading.value.toFixed(1)}%</div>
+                </div>;
+              })}
+            </div> : <div className="rounded-xl px-3 py-3 text-xs text-muted-foreground" style={{ background: "rgba(125,200,140,.035)", border: "1px solid rgba(125,200,140,.08)" }}>
+              {loading ? "Waiting for host telemetry…" : "CPU, memory, and root disk are below the 80% warning threshold."}
+            </div>}
+            <p className="mt-3 text-[10px] text-muted-foreground/45">Informational thresholds · telemetry refreshes every 15 seconds</p>
+          </div>
+
+          <div className="ops-panel rounded-2xl p-5" style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.14)" }}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2"><History className="h-4 w-4" style={{ color: "#e6ad68" }} /><h2 className="text-sm font-bold text-foreground">Recent DNS changes</h2></div>
+              <button onClick={() => navigate("/dns")} className="inline-flex items-center gap-1 text-[11px] text-[#e6ad68] transition-colors hover:text-[#f0c58f]">Open DNS <ArrowUpRight className="h-3 w-3" /></button>
+            </div>
+            {dnsAuditLoading ? <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 rounded-lg" />)}</div>
+              : recentDnsChanges.length ? <div className="divide-y divide-white/[.045]">
+                {recentDnsChanges.map((entry) => <div key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/85">{dnsActionLabel(entry.action)}</div><div className="mt-0.5 text-[10px] text-muted-foreground/55">{entry.targetType.replaceAll("_", " ")}{entry.targetId ? ` · ${entry.targetId.slice(0, 10)}` : ""}</div></div>
+                  <div className="flex flex-shrink-0 flex-col items-end gap-1"><span className="text-[10px] font-semibold" style={{ color: entry.status === "success" ? "#a9d8b0" : "#f2aaa5" }}>{entry.status}</span><time className="text-[9px] text-muted-foreground/45" dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleString()}</time></div>
+                </div>)}
+              </div> : <div className="rounded-xl px-3 py-3 text-xs text-muted-foreground" style={{ background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.045)" }}>No recent DNS record changes in the audit history.</div>}
+            <p className="mt-3 text-[10px] text-muted-foreground/45">Action, status, and time only; sensitive audit details are hidden.</p>
+          </div>
+        </section>
 
         {/* GitHub connection banner */}
         {!githubSshLoading && githubSsh && (

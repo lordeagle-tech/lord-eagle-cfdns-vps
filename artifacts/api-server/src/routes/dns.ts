@@ -289,6 +289,63 @@ router.get("/dns/zones/:id/records", async (req, res) => {
   }
 });
 
+const SECURITY_LEVELS = new Set(["off", "essentially_off", "low", "medium", "high", "under_attack"]);
+
+router.get("/dns/zones/:id/security", async (req, res) => {
+  const zone = await zoneFor(req, req.params.id);
+  if (!zone) { res.status(404).json({ error: "Zone not found" }); return; }
+  try {
+    const response = await cf(zone.apiToken, `/zones/${encodeURIComponent(zone.zone_id)}/settings/security_level`);
+    const value = String(response.result?.value ?? "");
+    if (!SECURITY_LEVELS.has(value)) throw new Error("Cloudflare returned an unsupported security level");
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ zoneId: zone.id, zoneName: zone.zone_name, securityLevel: value, editable: response.result?.editable !== false });
+  } catch {
+    res.status(502).json({ error: "Could not read this zone's Cloudflare security level. Check that the token has Zone Settings:Read." });
+  }
+});
+
+router.patch("/dns/zones/:id/security/under-attack", async (req, res) => {
+  const zone = await zoneFor(req, req.params.id);
+  if (!zone) { res.status(404).json({ error: "Zone not found" }); return; }
+  if (typeof req.body?.enabled !== "boolean" || req.body?.confirmation !== String(zone.zone_name)) {
+    res.status(400).json({ error: `Choose enable/disable and type the exact zone name (${zone.zone_name}) to confirm` }); return;
+  }
+  const enabled = req.body.enabled as boolean;
+  try {
+    const currentResponse = await cf(zone.apiToken, `/zones/${encodeURIComponent(zone.zone_id)}/settings/security_level`);
+    const current = String(currentResponse.result?.value ?? "");
+    if (!SECURITY_LEVELS.has(current)) throw new Error("Cloudflare returned an unsupported security level");
+    if (currentResponse.result?.editable === false) { res.status(409).json({ error: "This Cloudflare zone does not allow security-level changes with its current plan or token" }); return; }
+    if (enabled && current === "under_attack" || !enabled && current !== "under_attack") {
+      res.status(409).json({ error: enabled ? "Under Attack Mode is already enabled" : "Under Attack Mode is not currently enabled; no setting was changed" }); return;
+    }
+    let nextLevel = "under_attack";
+    if (enabled) {
+      await cf(zone.apiToken, `/zones/${encodeURIComponent(zone.zone_id)}/settings/security_level`, { method: "PATCH", body: JSON.stringify({ value: nextLevel }) });
+    } else {
+      const [rows] = await pool.query<any[]>(
+        `SELECT metadata FROM audit_logs WHERE owner_id=? AND target_type='dns_zone' AND target_id=?
+          AND action='cloudflare.security.under_attack.enable' AND status='success' ORDER BY id DESC LIMIT 1`,
+        [ownerId(req), String(zone.id)],
+      );
+      let previous = "medium";
+      try {
+        const metadata = typeof rows[0]?.metadata === "string" ? JSON.parse(rows[0].metadata) : rows[0]?.metadata;
+        if (SECURITY_LEVELS.has(String(metadata?.previousLevel)) && metadata.previousLevel !== "under_attack") previous = String(metadata.previousLevel);
+      } catch { /* default to medium if prior audit metadata is unavailable */ }
+      nextLevel = previous;
+      await cf(zone.apiToken, `/zones/${encodeURIComponent(zone.zone_id)}/settings/security_level`, { method: "PATCH", body: JSON.stringify({ value: nextLevel }) });
+    }
+    await audit(req, enabled ? "cloudflare.security.under_attack.enable" : "cloudflare.security.under_attack.disable", "dns_zone", zone.id, "success", { zoneName: zone.zone_name, previousLevel: current, nextLevel }).catch(() => undefined);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, zoneName: zone.zone_name, enabled, securityLevel: nextLevel, restoredPreviousLevel: !enabled });
+  } catch {
+    await audit(req, enabled ? "cloudflare.security.under_attack.enable" : "cloudflare.security.under_attack.disable", "dns_zone", zone.id, "failed", { zoneName: zone.zone_name }).catch(() => undefined);
+    res.status(502).json({ error: "Cloudflare did not apply the security change. Check that the token has Zone Settings:Edit and refresh the live status." });
+  }
+});
+
 router.post("/dns/zones/:id/records", async (req, res) => {
   const zone = await zoneFor(req, req.params.id);
   if (!zone) { res.status(404).json({ error: "Zone not found" }); return; }

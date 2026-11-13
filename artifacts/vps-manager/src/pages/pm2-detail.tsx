@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
-  ArrowLeft, RefreshCw, RotateCcw, Square, Play, Trash2,
+  ArrowLeft, RefreshCw, RotateCcw, Square, Play, Trash2, Search, Download, Pause, Radio,
   CheckCircle2, XCircle, AlertCircle, FolderOpen,
   FileText, Terminal, Cpu, MemoryStick, Clock, Hash,
   ChevronRight, Layers, Copy, Check, Wrench, ChevronDown, ChevronUp,
@@ -58,6 +58,20 @@ function fmtUptime(ms: number) {
 }
 
 type LogTab = "combined" | "stdout" | "stderr";
+type LogSeverity = "all" | "error" | "warn" | "info";
+
+function logSeverity(entry: { line: string; type: "out" | "err" }): Exclude<LogSeverity, "all"> {
+  if (entry.type === "err" || /\b(error|fatal|exception|panic)\b/i.test(entry.line)) return "error";
+  if (/\b(warn|warning|deprecated)\b/i.test(entry.line)) return "warn";
+  return "info";
+}
+
+function logTimestamp(line: string): string {
+  const match = line.match(/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/);
+  if (!match) return "NO TIMESTAMP";
+  const value = new Date(match[0]);
+  return Number.isNaN(value.getTime()) ? match[0] : value.toLocaleTimeString([], { hour12: false });
+}
 
 export default function Pm2DetailPage() {
   const { name } = useParams<{ name: string }>();
@@ -71,8 +85,12 @@ export default function Pm2DetailPage() {
   const [acting, setActing] = useState<string | null>(null);
   const [logTab, setLogTab] = useState<LogTab>("combined");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [logSearch, setLogSearch] = useState("");
+  const [logSeverityFilter, setLogSeverityFilter] = useState<LogSeverity>("all");
+  const [logLineLimit, setLogLineLimit] = useState(100);
   const [logCopied, setLogCopied] = useState(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsViewportRef = useRef<HTMLDivElement>(null);
 
   const [buildLines, setBuildLines] = useState<{ text: string; type: "info" | "output" | "error" | "done" }[]>([]);
   const [showBuildPanel, setShowBuildPanel] = useState(false);
@@ -95,11 +113,11 @@ export default function Pm2DetailPage() {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch(`/api/system/pm2/${encodeURIComponent(name)}/logs?lines=100`, { headers });
+      const res = await fetch(`/api/system/pm2/${encodeURIComponent(name)}/logs?lines=${logLineLimit}`, { headers });
       if (res.ok) setLogs(await res.json());
     } catch { /* ignore */ }
     setLogsLoading(false);
-  }, [name]);
+  }, [name, logLineLimit]);
 
   useEffect(() => {
     fetchProc();
@@ -113,8 +131,8 @@ export default function Pm2DetailPage() {
   }, [autoRefresh, fetchProc, fetchLogs]);
 
   useEffect(() => {
-    if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+    if (autoScroll && logsViewportRef.current) logsViewportRef.current.scrollTop = logsViewportRef.current.scrollHeight;
+  }, [logs, autoScroll]);
 
   useEffect(() => {
     if (!proc?.cwd) return;
@@ -216,6 +234,22 @@ export default function Pm2DetailPage() {
     logTab === "stdout" ? (logs?.stdout ?? []).map((l) => ({ line: l, type: "out" as const }))
     : logTab === "stderr" ? (logs?.stderr ?? []).map((l) => ({ line: l, type: "err" as const }))
     : combinedLogs;
+  const filteredLogs = displayedLogs.filter((entry) => {
+    const matchesText = !logSearch.trim() || entry.line.toLowerCase().includes(logSearch.trim().toLowerCase());
+    const matchesSeverity = logSeverityFilter === "all" || logSeverity(entry) === logSeverityFilter;
+    return matchesText && matchesSeverity;
+  });
+
+  function downloadLogs() {
+    const content = filteredLogs.map((entry) => `[${logTimestamp(entry.line)}] [${entry.type === "err" ? "STDERR" : "STDOUT"}] ${entry.line}`).join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${String(name).replace(/[^a-z0-9._-]/gi, "_")}-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.log`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "#0b0b0c" }}>
@@ -518,47 +552,64 @@ export default function Pm2DetailPage() {
         </div>
 
         {/* Logs section */}
-        <div className="rounded-2xl overflow-hidden"
-          style={{ background: "#111113", border: "1px solid rgba(255,90,31,.18)" }}>
-          <div className="flex items-center justify-between px-5 py-3"
-            style={{ borderBottom: "1px solid rgba(255,90,31,.1)", background: "rgba(255,90,31,.04)" }}>
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4" style={{ color: "#ff5a1f" }} />
-              <h2 className="text-sm font-bold text-foreground">Logs</h2>
-              <span className="text-xs text-muted-foreground/50">— last 100 lines</span>
+        <div className="group relative rounded-2xl overflow-hidden"
+          style={{ background: "linear-gradient(145deg, #151719, #0d0f10 72%)", border: "1px solid rgba(230,173,104,.22)", boxShadow: "0 18px 55px rgba(0,0,0,.28), 0 0 36px rgba(230,173,104,.035)" }}>
+          <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #8e5f35, #e6ad68 38%, #f0c58f 52%, #6e5034)" }} />
+          <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+            style={{ borderBottom: "1px solid rgba(230,173,104,.12)", background: "linear-gradient(90deg, rgba(230,173,104,.075), rgba(255,255,255,.015) 58%, transparent)" }}>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
+                style={{ background: "rgba(230,173,104,.11)", border: "1px solid rgba(230,173,104,.22)" }}>
+                <Terminal className="w-4 h-4" style={{ color: "#e6ad68" }} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-bold tracking-wide text-foreground">Process logs</h2>
+                  <span className="rounded-full px-2 py-0.5 font-mono text-[9px] tracking-[.14em]"
+                    style={{ color: autoRefresh ? "#a9d8b0" : "#9a9389", background: autoRefresh ? "rgba(125,200,140,.09)" : "rgba(255,255,255,.045)", border: `1px solid ${autoRefresh ? "rgba(125,200,140,.18)" : "rgba(255,255,255,.08)"}` }}>
+                    {autoRefresh ? "● LIVE STREAM" : "○ PAUSED"}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] font-mono text-muted-foreground/60">
+                  <span className="truncate">{proc?.name ?? name}</span><span>/</span><span>tail · {logLineLimit} lines per stream</span>
+                  <span className="text-white/15">|</span><span>{filteredLogs.length} / {displayedLogs.length} shown</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1 rounded-xl p-1"
+              style={{ background: "rgba(0,0,0,.24)", border: "1px solid rgba(255,255,255,.055)" }}>
               {(["combined", "stdout", "stderr"] as LogTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setLogTab(tab)}
-                  className="h-6 px-2.5 rounded text-xs font-medium transition-colors"
+                  className="h-7 px-2.5 rounded-lg text-[11px] font-medium transition-all"
                   style={{
-                    background: logTab === tab ? "rgba(255,90,31,.2)" : "transparent",
-                    color: logTab === tab ? "#ffb89f" : "var(--muted-foreground)",
-                    border: `1px solid ${logTab === tab ? "rgba(255,90,31,.4)" : "transparent"}`,
+                    background: logTab === tab ? "linear-gradient(135deg, rgba(230,173,104,.2), rgba(230,173,104,.08))" : "transparent",
+                    color: logTab === tab ? "#f0c58f" : "var(--muted-foreground)",
+                    border: `1px solid ${logTab === tab ? "rgba(230,173,104,.27)" : "transparent"}`,
+                    boxShadow: logTab === tab ? "0 2px 10px rgba(0,0,0,.18)" : "none",
                   }}
                 >
                   {tab === "combined" ? "All" : tab}
                   {tab === "stderr" && logs && logs.stderr.length > 0 && (
-                    <span className="ml-1 text-[10px] text-[#ff6b6b]">({logs.stderr.length})</span>
+                    <span className="ml-1 rounded-full px-1 text-[9px] text-red-200" style={{ background: "rgba(248,113,113,.13)" }}>{logs.stderr.length}</span>
                   )}
                 </button>
               ))}
-              {displayedLogs.length > 0 && (
+              {filteredLogs.length > 0 && (
                 <button
                   onClick={() => {
-                    const text = displayedLogs.map((e) => e.line).join("\n");
+                    const text = filteredLogs.map((e) => `[${logTimestamp(e.line)}] [${e.type === "err" ? "STDERR" : "STDOUT"}] ${e.line}`).join("\n");
                     navigator.clipboard.writeText(text).then(() => {
                       setLogCopied(true);
                       setTimeout(() => setLogCopied(false), 2000);
                     });
                   }}
-                  className="h-6 px-2 rounded text-xs font-medium flex items-center gap-1 transition-colors ml-1"
+                  className="h-7 px-2.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors ml-1"
                   style={{
-                    background: "transparent",
-                    color: logCopied ? "#ffd1c2" : "var(--muted-foreground)",
-                    border: `1px solid ${logCopied ? "rgba(255,255,255,.3)" : "transparent"}`,
+                    background: logCopied ? "rgba(125,200,140,.09)" : "rgba(255,255,255,.025)",
+                    color: logCopied ? "#a9d8b0" : "var(--muted-foreground)",
+                    border: `1px solid ${logCopied ? "rgba(125,200,140,.2)" : "rgba(255,255,255,.055)"}`,
                   }}
                   title="Copy all logs"
                 >
@@ -569,29 +620,75 @@ export default function Pm2DetailPage() {
             </div>
           </div>
 
-          <div className="font-mono text-xs overflow-y-auto" style={{ maxHeight: "420px", background: "#070809" }}>
+          <div className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:px-5"
+            style={{ borderColor: "rgba(230,173,104,.09)", background: "rgba(0,0,0,.16)" }}>
+            <label className="relative min-w-[180px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+              <input value={logSearch} onChange={(event) => setLogSearch(event.target.value)} placeholder="Search log text…"
+                className="h-8 w-full rounded-lg border pl-9 pr-3 text-xs text-white/80 outline-none placeholder:text-white/30 focus:border-amber-300/40"
+                style={{ background: "rgba(0,0,0,.28)", borderColor: "rgba(255,255,255,.08)" }} />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wide text-white/40">
+                Severity
+                <select value={logSeverityFilter} onChange={(event) => setLogSeverityFilter(event.target.value as LogSeverity)}
+                  className="h-8 rounded-lg border px-2 text-xs normal-case tracking-normal text-white/75 outline-none"
+                  style={{ background: "#111416", borderColor: "rgba(255,255,255,.09)" }}>
+                  <option value="all">All levels</option><option value="error">Errors</option><option value="warn">Warnings</option><option value="info">Info / other</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wide text-white/40">
+                Tail
+                <select value={logLineLimit} onChange={(event) => setLogLineLimit(Number(event.target.value))}
+                  className="h-8 rounded-lg border px-2 text-xs normal-case tracking-normal text-white/75 outline-none"
+                  style={{ background: "#111416", borderColor: "rgba(255,255,255,.09)" }}>
+                  {[100, 250, 500].map((limit) => <option key={limit} value={limit}>{limit} lines</option>)}
+                </select>
+              </label>
+              <button onClick={() => setAutoScroll((value) => !value)} aria-pressed={autoScroll}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] transition-colors"
+                style={{ color: autoScroll ? "#f0c58f" : "#aaa49b", background: autoScroll ? "rgba(230,173,104,.08)" : "rgba(255,255,255,.025)", borderColor: autoScroll ? "rgba(230,173,104,.18)" : "rgba(255,255,255,.07)" }}>
+                {autoScroll ? <Radio className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{autoScroll ? "Follow" : "Hold view"}
+              </button>
+              <button onClick={downloadLogs} disabled={!filteredLogs.length}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] text-white/55 transition-colors hover:text-[#f0c58f] disabled:cursor-not-allowed disabled:opacity-30"
+                style={{ background: "rgba(255,255,255,.025)", borderColor: "rgba(255,255,255,.07)" }}>
+                <Download className="h-3.5 w-3.5" />Export
+              </button>
+            </div>
+          </div>
+
+          <div ref={logsViewportRef} className="relative font-mono text-xs overflow-y-auto" style={{ maxHeight: "460px", minHeight: "190px", backgroundColor: "#090b0c", backgroundImage: "linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px), radial-gradient(ellipse at 12% 0%, rgba(230,173,104,.065), transparent 48%)", backgroundSize: "28px 28px, 28px 28px, auto" }}>
             {logsLoading ? (
               <div className="p-4 space-y-1.5">
                 {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-4 rounded w-full" />)}
               </div>
-            ) : displayedLogs.length === 0 ? (
-              <div className="p-6 text-center text-muted-foreground/40 text-xs">No log output</div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="flex min-h-[190px] flex-col items-center justify-center gap-2 px-4 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ color: "#b58b5d", background: "rgba(230,173,104,.07)", border: "1px solid rgba(230,173,104,.12)" }}><Terminal className="h-4 w-4" /></div>
+                <div className="text-xs font-medium text-white/55">{displayedLogs.length ? "No lines match these filters" : "No output in this stream"}</div>
+                <div className="text-[10px] text-white/30">{displayedLogs.length ? "Adjust search or severity to see more output" : "New process activity will appear here automatically"}</div>
+              </div>
             ) : (
-              <div className="p-3 space-y-0.5">
-                {displayedLogs.map((entry, i) => (
-                  <div key={i} className="flex gap-2 group hover:bg-white/[0.02] px-1 rounded leading-5">
-                    <span className="text-muted-foreground/30 select-none w-6 text-right flex-shrink-0">
+              <div className="space-y-px p-2 sm:p-3">
+                {filteredLogs.map((entry, i) => (
+                  <div key={`${entry.type}-${i}-${entry.line}`} className="group/line relative flex items-start gap-2 sm:gap-3 rounded-md px-2 py-1 leading-5 transition-colors hover:bg-white/[0.035]"
+                    style={{ borderLeft: `2px solid ${entry.type === "err" ? "rgba(248,113,113,.62)" : "rgba(230,173,104,.18)"}` }}>
+                    <span className="select-none w-7 flex-shrink-0 text-right text-white/20 tabular-nums group-hover/line:text-[#e6ad68]/65">
                       {i + 1}
                     </span>
+                    <span className="hidden w-[68px] flex-shrink-0 pt-px text-[10px] tabular-nums text-white/35 sm:inline">{logTimestamp(entry.line)}</span>
+                    <span className="mt-[2px] w-[48px] flex-shrink-0 rounded px-1 py-px text-center text-[9px] font-bold tracking-wide"
+                      style={{ color: entry.type === "err" ? "#f2aaa5" : "#d4ad7c", background: entry.type === "err" ? "rgba(248,113,113,.08)" : "rgba(230,173,104,.07)" }}>{entry.type === "err" ? "STDERR" : "STDOUT"}</span>
+                    <span className="mt-[5px] h-2 w-2 flex-shrink-0 rounded-[3px]" style={{ background: entry.type === "err" ? "#f87171" : "#c59a68", boxShadow: `0 0 8px ${entry.type === "err" ? "rgba(248,113,113,.28)" : "rgba(197,154,104,.2)"}` }} />
                     <span
-                      className="break-all"
-                      style={{ color: entry.type === "err" ? "#ff8a80" : "rgba(255,255,255,.75)" }}
+                      className="min-w-0 break-all"
+                      style={{ color: entry.type === "err" ? "#f2aaa5" : "rgba(235,232,225,.78)" }}
                     >
                       {entry.line}
                     </span>
                   </div>
                 ))}
-                <div ref={logsEndRef} />
               </div>
             )}
           </div>
