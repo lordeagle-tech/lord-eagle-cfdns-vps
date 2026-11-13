@@ -52,6 +52,7 @@ CFDNS Manager combines Cloudflare DNS operations with direct VPS administration 
 - MySQL-compatible managed database schema for users, sessions, servers, zones, links, and audit logs.
 - One Express service serving the API and built React application.
 - Route manifest and health endpoint ready for managed deployment.
+- An authenticated in-app Docs handbook covering feature workflows, setup, security boundaries, troubleshooting, and links to this full README.
 
 ## Interface direction
 

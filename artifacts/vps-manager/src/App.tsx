@@ -2,7 +2,7 @@ import { Router as WouterRouter, Switch, Route, Redirect, useLocation } from "wo
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { Navbar } from "@/components/navbar";
@@ -21,6 +21,7 @@ import GithubControlPage from "@/pages/github-control";
 import DeployScriptPage from "@/pages/deploy-script";
 import FirewallPage from "@/pages/firewall";
 import PortsPage from "@/pages/ports";
+const DocsPage = lazy(() => import("@/pages/docs"));
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -121,6 +122,14 @@ function AppRoutes() {
 
       <Route path="/ports">
         <ProtectedLayout><PortsPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/docs">
+        <ProtectedLayout>
+          <Suspense fallback={<div className="flex-1 min-h-0 p-6 text-sm text-muted-foreground">Loading handbook…</div>}>
+            <DocsPage />
+          </Suspense>
+        </ProtectedLayout>
       </Route>
 
       <Route path="/connections/:id/terminal">
