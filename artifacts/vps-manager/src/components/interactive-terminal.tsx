@@ -7,8 +7,14 @@ import "@xterm/xterm/css/xterm.css";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 type ServerMessage = { type: "output" | "notice" | "error" | "exit"; data?: string; message?: string; exitCode?: number; signal?: number };
+type InteractiveTerminalProps = {
+  onClose?: () => void;
+  websocketPath?: string;
+  accountNotice?: string;
+  openingMessage?: string;
+};
 
-export default function InteractiveTerminal({ onClose }: { onClose?: () => void }) {
+export default function InteractiveTerminal({ onClose, websocketPath = "/api/terminal/session", accountNotice = "Runs as the manager's unprivileged service account", openingMessage = "Opening a secure PTY-backed Bash session…" }: InteractiveTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<ConnectionState>("connecting");
   const [attempt, setAttempt] = useState(0);
@@ -53,9 +59,9 @@ export default function InteractiveTerminal({ onClose }: { onClose?: () => void 
     terminal.open(container);
 
     const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${scheme}//${window.location.host}/api/terminal/session`);
+    const socket = new WebSocket(`${scheme}//${window.location.host}${websocketPath}`);
     setState("connecting");
-    terminal.writeln("\x1b[90mOpening a secure PTY-backed Bash session…\x1b[0m");
+    terminal.writeln(`\x1b[90m${openingMessage}\x1b[0m`);
 
     const send = (payload: object) => {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
@@ -120,7 +126,7 @@ export default function InteractiveTerminal({ onClose }: { onClose?: () => void 
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close(1000, "Terminal view closed");
       terminal.dispose();
     };
-  }, [attempt]);
+  }, [attempt, websocketPath, openingMessage]);
 
   const statusText = state === "connected" ? "CONNECTED" : state === "connecting" ? "CONNECTING" : state === "error" ? "CONNECTION ERROR" : "DISCONNECTED";
   const statusColor = state === "connected" ? "text-emerald-300" : state === "connecting" ? "text-amber-200" : "text-rose-300";
@@ -134,7 +140,7 @@ export default function InteractiveTerminal({ onClose }: { onClose?: () => void 
           <span className={`ml-2 text-[10px] font-bold tracking-[.14em] ${statusColor}`}>{statusText}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden text-[11px] text-muted-foreground sm:inline">Runs as the manager's unprivileged service account</span>
+          <span className="hidden text-[11px] text-muted-foreground sm:inline">{accountNotice}</span>
           {state !== "connected" && <Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)} className="h-8 border-cyan-200/20 hover:bg-cyan-300/10"><RefreshCw className="mr-2 h-3.5 w-3.5" />Reconnect</Button>}
           {onClose && <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Close terminal" aria-label="Close terminal"><X className="h-4 w-4" /></Button>}
         </div>

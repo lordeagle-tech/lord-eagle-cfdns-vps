@@ -290,7 +290,7 @@ export default function ConnectionsPage() {
               <span className="ops-kicker">SSH vault / host profiles</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight"><span className="brand-gradient">VPS Connections</span></h1>
-            <p className="text-sm text-muted-foreground mt-1">Save and test SSH access for the other servers you manage.</p>
+            <p className="text-sm text-muted-foreground mt-1">Save SSH access, verify each host key, then open an interactive Linux shell on any pinned VPS.</p>
           </div>
           <Button onClick={openNewForm} className="gap-2 self-start sm:self-auto" style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c" }}>
             <Plus className="w-4 h-4" /> Add VPS
