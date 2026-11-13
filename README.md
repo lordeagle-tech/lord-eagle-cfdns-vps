@@ -119,10 +119,9 @@ pnpm --filter @workspace/api-server run build
 PORT=3000 NODE_ENV=production node --enable-source-maps artifacts/api-server/dist/index.mjs
 ```
 
-The unified service serves the built frontend, `/api` endpoints, `/api/healthz`, and `/manus-routes.json` from one listener.
+The unified service serves the built frontend, `/api` endpoints, `/api/healthz`, and the route inventory at `/routes.json` from one listener.
 
 ### Self-hosted VPS bootstrap
-
 For a fresh Ubuntu or Debian VPS, point the panel domain's DNS A/AAAA record at the server and allow inbound TCP 80/443 in the provider firewall. Clone this repository on the VPS and run the installer:
 
 ```bash
@@ -201,13 +200,13 @@ Restore verifies the checksum, creates a fresh pre-restore backup, and requires 
 ├── artifacts/
 │   ├── api-server/          # Express API, auth, SSH, Cloudflare, audit, and static serving
 │   └── vps-manager/         # React/Vite operations console
+│       └── public/          # Frontend assets, including routes.json
 ├── lib/
 │   ├── db/                  # Drizzle schema and MySQL connection
 │   ├── api-client-react/    # API client and React Query hooks
 │   ├── api-spec/            # OpenAPI source
 │   └── api-zod/             # Zod contracts
 ├── drizzle/                 # Database migration SQL
-├── public/                  # Route manifest and project metadata
 ├── Dockerfile               # One-service production image
 ├── plan.md                  # Product and design record
 └── TODO.md                  # Outcome checklist
