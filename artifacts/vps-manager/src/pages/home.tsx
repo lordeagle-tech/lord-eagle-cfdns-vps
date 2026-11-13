@@ -301,7 +301,7 @@ export default function HomePage() {
       <div
         className="relative overflow-hidden px-6 py-8"
         style={{
-          background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(230,173,104,.12) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse 78% 100% at 12% 0%, rgba(245,182,91,.25) 0%, transparent 68%), radial-gradient(ellipse 62% 90% at 92% 24%, rgba(47,137,124,.18) 0%, transparent 72%), linear-gradient(145deg, rgba(24,28,32,.76), rgba(12,14,17,.2))",
         }}
       >
         <div className="loop-network-visual" aria-hidden="true">
