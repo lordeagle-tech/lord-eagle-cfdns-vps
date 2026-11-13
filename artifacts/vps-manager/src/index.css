@@ -236,12 +236,12 @@
     accent-color: var(--dashboard-amber);
   }
   .dashboard-theme .ops-panel {
-    background-image: radial-gradient(ellipse 90% 75% at 100% 0%, rgba(99,214,232,.12), transparent 68%), linear-gradient(145deg, rgba(34,38,43,.98), rgba(21,24,28,.98)) !important;
-    border-color: var(--dashboard-line);
-    box-shadow: 0 14px 38px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035);
+    background-image: radial-gradient(ellipse 100% 90% at 100% 0%, rgba(34,211,238,.24), transparent 68%), radial-gradient(ellipse 75% 75% at 0% 100%, rgba(34,211,238,.10), transparent 72%), linear-gradient(145deg, rgba(29,40,45,.99), rgba(17,23,27,.99)) !important;
+    border-color: rgba(34,211,238,.34);
+    box-shadow: 0 14px 38px rgba(0,0,0,.28), 0 0 22px rgba(34,211,238,.07), inset 0 1px rgba(103,232,249,.2);
   }
-  .dashboard-theme .loop-surface { background: linear-gradient(145deg, rgba(29,38,42,.97), rgba(19,24,28,.97)); border: 1px solid rgba(99,214,232,.19); border-radius: 20px; }
-  .dashboard-theme .loop-surface-strong { background: linear-gradient(145deg, rgba(39,48,53,.98), rgba(25,31,35,.98)); border: 1px solid rgba(99,214,232,.28); border-radius: 20px; box-shadow: inset 0 1px rgba(99,214,232,.1), 0 12px 32px rgba(0,0,0,.2); }
+  .dashboard-theme .loop-surface { background: linear-gradient(145deg, rgba(28,43,48,.98), rgba(18,27,31,.98)); border: 1px solid rgba(34,211,238,.3); border-radius: 20px; box-shadow: inset 0 1px rgba(103,232,249,.13), 0 10px 28px rgba(0,0,0,.18); }
+  .dashboard-theme .loop-surface-strong { background: linear-gradient(145deg, rgba(32,52,58,.99), rgba(21,34,39,.99)); border: 1px solid rgba(34,211,238,.42); border-radius: 20px; box-shadow: inset 0 1px rgba(103,232,249,.2), 0 12px 32px rgba(0,0,0,.22), 0 0 20px rgba(34,211,238,.08); }
   .dashboard-theme .loop-accent { color: var(--dashboard-amber); }
   .dashboard-theme .loop-label { color: #c0b29c; font-family: var(--app-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
   .dashboard-theme .ops-kicker { color: var(--dashboard-amber); }
