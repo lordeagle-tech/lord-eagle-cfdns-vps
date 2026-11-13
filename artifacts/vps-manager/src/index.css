@@ -253,18 +253,18 @@
   .dashboard-theme main > .flex-1 {
     position: relative;
     isolation: isolate;
+    background-color: transparent !important;
     background-image:
-      radial-gradient(ellipse 78% 55% at 8% 0%, rgba(245,182,91,.32), transparent 72%),
-      radial-gradient(ellipse 68% 58% at 96% 100%, rgba(34,211,238,.27), transparent 72%),
+      radial-gradient(ellipse 78% 55% at 8% 0%, rgba(245,182,91,.2), transparent 72%),
+      radial-gradient(ellipse 68% 58% at 96% 100%, rgba(34,211,238,.16), transparent 72%),
       radial-gradient(circle at 1px 1px, rgba(138,210,220,.17) 1px, transparent 1.5px),
       linear-gradient(rgba(105,176,189,.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(105,176,189,.06) 1px, transparent 1px),
-      linear-gradient(145deg, #0d1014, #0b0e11) !important;
-    background-size: 180% 180%, 180% 180%, 32px 32px, 64px 64px, 64px 64px, auto;
-    background-position: 0% 0%, 100% 100%, 0 0, 0 0, 0 0, 0 0;
+      linear-gradient(90deg, rgba(105,176,189,.06) 1px, transparent 1px) !important;
+    background-size: 180% 180%, 180% 180%, 32px 32px, 64px 64px, 64px 64px;
+    background-position: 0% 0%, 100% 100%, 0 0, 0 0, 0 0;
     background-attachment: local;
-    background-repeat: no-repeat, no-repeat, repeat, repeat, repeat, no-repeat;
-    animation: dashboard-backdrop-drift 24s ease-in-out infinite alternate;
+    background-repeat: no-repeat, no-repeat, repeat, repeat, repeat;
+    animation: dashboard-backdrop-drift 14s ease-in-out infinite alternate;
   }
   .dashboard-theme main > .flex-1::before {
     content: "";
@@ -273,20 +273,20 @@
     inset: 0;
     pointer-events: none;
     background-image:
-      radial-gradient(ellipse 58% 48% at 12% 18%, rgba(255,190,92,.46), transparent 74%),
-      radial-gradient(ellipse 58% 54% at 86% 74%, rgba(34,211,238,.4), transparent 72%),
-      radial-gradient(ellipse 42% 46% at 66% 14%, rgba(76,125,255,.2), transparent 72%);
-    background-size: 145% 145%, 150% 150%, 150% 150%;
+      radial-gradient(ellipse 58% 48% at 12% 18%, rgba(255,190,92,.62), transparent 74%),
+      radial-gradient(ellipse 58% 54% at 86% 74%, rgba(34,211,238,.58), transparent 72%),
+      radial-gradient(ellipse 42% 46% at 66% 14%, rgba(76,125,255,.28), transparent 72%);
+    background-size: 180% 180%, 185% 185%, 175% 175%;
     background-position: 0% 0%, 100% 100%, 50% 0%;
     background-repeat: no-repeat;
-    animation: dashboard-aurora-drift 18s ease-in-out infinite alternate;
+    animation: dashboard-aurora-drift 12s ease-in-out infinite alternate;
   }
   @keyframes dashboard-backdrop-drift {
-    from { background-position: 0% 0%, 100% 100%, 0 0, 0 0, 0 0, 0 0; }
-    to { background-position: 100% 55%, 0% 45%, 32px 32px, 64px 64px, -64px 64px, 0 0; }
+    from { background-position: 0% 0%, 100% 100%, 0 0, 0 0, 0 0; }
+    to { background-position: 100% 55%, 0% 45%, 32px 32px, 64px 64px, -64px 64px; }
   }
   @keyframes dashboard-aurora-drift {
-    from { background-position: 0% 0%, 100% 100%, 50% 0%; opacity: .72; }
+    from { background-position: 0% 0%, 100% 100%, 50% 0%; opacity: .8; }
     to { background-position: 100% 45%, 0% 42%, 12% 100%; opacity: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
