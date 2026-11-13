@@ -939,94 +939,10 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
           </div>
         )}
 
-        {terminalOnly && rightPanel === "terminal" && <Suspense fallback={<div className="flex flex-1 items-center justify-center font-mono text-sm text-muted-foreground">Loading terminal…</div>}><InteractiveTerminal /></Suspense>}
-
-        {/* ── Terminal (inline panel) ── */}
-        {!terminalOnly && rightPanel === "terminal" && (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            {/* Terminal header */}
-            <div className="h-12 border-b border-border bg-card/40 flex items-center justify-between px-4 flex-shrink-0 gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <Terminal className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="font-mono text-sm text-primary flex-shrink-0">Terminal</span>
-                <span className="font-mono text-xs text-muted-foreground/60 ml-1 truncate">{termCwd}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                {termHistory.length > 0 && (
-                  <>
-                    <Button
-                      variant="ghost" size="sm"
-                      className="h-7 px-2 font-mono text-xs text-muted-foreground hover:text-foreground gap-1.5"
-                      onClick={() => copyText(buildAllText(), "all")}
-                    >
-                      {copiedIdx === "all"
-                        ? <><Check className="w-3.5 h-3.5 text-green-400" /> Copied</>
-                        : <><Copy className="w-3.5 h-3.5" /> Copy all</>}
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => setTermHistory([])}
-                      title="Clear"
-                    >
-                      <Eraser className="w-3.5 h-3.5" />
-                    </Button>
-                  </>
-                )}
-                {!terminalOnly && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={closeRightPanel}>
-                  <X className="w-3.5 h-3.5" />
-                </Button>}
-              </div>
-            </div>
-
-            {/* Output */}
-            <div ref={termRef} className="flex-1 min-h-0 overflow-y-auto bg-black p-4 font-mono text-xs leading-relaxed">
-              {termHistory.length === 0 && (
-                <div className="text-muted-foreground/30 italic">Type a command below…</div>
-              )}
-              {termHistory.map((entry, i) => (
-                <div key={i} className="mb-4 group">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-primary/70 font-mono">$ {entry.cmd}</div>
-                    <button
-                      className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                      onClick={() => copyText(buildBlockText(entry), i)}
-                    >
-                      {copiedIdx === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                  {entry.cwd && (
-                    <div className="text-cyan-400/70 text-[11px] mt-0.5 font-mono">→ {entry.cwd}</div>
-                  )}
-                  {entry.stdout && <pre className="text-green-300/80 whitespace-pre-wrap break-all mt-0.5">{entry.stdout}</pre>}
-                  {entry.stderr && <pre className="text-red-400/80 whitespace-pre-wrap break-all mt-0.5">{entry.stderr}</pre>}
-                  {entry.code !== 0 && <div className="text-red-500/60 text-[10px] mt-0.5">exit: {entry.code}</div>}
-                </div>
-              ))}
-            </div>
-
-            {/* Input */}
-            <div className="flex items-center gap-2 px-4 py-3 border-t border-border flex-shrink-0 bg-black">
-              <span className="font-mono text-sm text-primary/60 flex-shrink-0">$</span>
-              <Input
-                ref={termInputRef}
-                value={termCmd}
-                onChange={(e) => setTermCmd(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") runCommand(); }}
-                onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 150)}
-                placeholder="command…"
-                className="flex-1 font-mono text-sm bg-transparent border-0 focus-visible:ring-0 px-0 h-8"
-                autoCapitalize="none"
-                autoCorrect="off"
-                autoComplete="off"
-                spellCheck={false}
-                inputMode="text"
-              />
-              <Button size="sm" className="h-8 px-3 flex-shrink-0" onClick={runCommand} disabled={!termCmd.trim() || execMut.isPending}>
-                <Play className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          </div>
+        {rightPanel === "terminal" && (
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center font-mono text-sm text-muted-foreground">Loading terminal…</div>}>
+            <InteractiveTerminal onClose={terminalOnly ? undefined : closeRightPanel} />
+          </Suspense>
         )}
 
         {/* ── Logs panel ── */}

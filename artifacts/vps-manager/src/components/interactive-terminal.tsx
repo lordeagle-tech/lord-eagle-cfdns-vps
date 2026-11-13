@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
-import { RefreshCw, Terminal as TerminalIcon } from "lucide-react";
+import { RefreshCw, Terminal as TerminalIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import "@xterm/xterm/css/xterm.css";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 type ServerMessage = { type: "output" | "notice" | "error" | "exit"; data?: string; message?: string; exitCode?: number; signal?: number };
 
-export default function InteractiveTerminal() {
+export default function InteractiveTerminal({ onClose }: { onClose?: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<ConnectionState>("connecting");
   const [attempt, setAttempt] = useState(0);
@@ -136,6 +136,7 @@ export default function InteractiveTerminal() {
         <div className="flex items-center gap-3">
           <span className="hidden text-[11px] text-muted-foreground sm:inline">Runs as the manager's unprivileged service account</span>
           {state !== "connected" && <Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)} className="h-8 border-cyan-200/20 hover:bg-cyan-300/10"><RefreshCw className="mr-2 h-3.5 w-3.5" />Reconnect</Button>}
+          {onClose && <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Close terminal" aria-label="Close terminal"><X className="h-4 w-4" /></Button>}
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden bg-[#050708] p-2 sm:p-3">
