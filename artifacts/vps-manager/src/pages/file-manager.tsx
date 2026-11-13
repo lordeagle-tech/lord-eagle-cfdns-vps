@@ -530,6 +530,7 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
   const crumbs = currentPath.split("/").filter(Boolean);
   const isPending = mkdirMut.isPending || newFileMut.isPending || renameMut.isPending;
   const rightPanelOpen = rightPanel !== null;
+  const terminalOnly = initialPanel === "terminal";
 
   // ── File list (reused in main view + drawer) ──────────────────────────────
 
@@ -669,8 +670,9 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
           </Button>
         )}
 
+        {terminalOnly && <div className="flex flex-1 items-center gap-2 font-mono text-sm text-cyan-200"><Terminal className="h-4 w-4" />VPS Terminal <span className="ml-2 truncate text-xs text-muted-foreground">{termCwd}</span></div>}
         {/* Breadcrumb */}
-        <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto scrollbar-none font-mono text-sm">
+        {!terminalOnly && <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto scrollbar-none font-mono text-sm">
           <Button
             variant="ghost" size="sm"
             className="h-7 px-2 flex-shrink-0 text-muted-foreground hover:text-primary"
@@ -694,23 +696,23 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
               </div>
             );
           })}
-        </div>
+        </div>}
 
         {/* Right toolbar */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {!rightPanelOpen && listing?.parentPath != null && (
+          {!terminalOnly && !rightPanelOpen && listing?.parentPath != null && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => goTo(listing.parentPath!)} title="Go up">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           )}
-          {!rightPanelOpen && (
+          {!terminalOnly && !rightPanelOpen && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()} title="Refresh">
               <RefreshCw className="w-4 h-4" />
             </Button>
           )}
 
           {/* Logs toggle */}
-          <Button
+          {!terminalOnly && <Button
             variant={rightPanel === "logs" ? "secondary" : "ghost"}
             size="sm"
             className="h-8 gap-1.5 font-mono text-xs"
@@ -719,10 +721,10 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
           >
             <ScrollText className="w-3.5 h-3.5" />
             Logs
-          </Button>
+          </Button>}
 
           {/* Terminal toggle */}
-          <Button
+          {!terminalOnly && <Button
             variant={rightPanel === "terminal" ? "secondary" : "ghost"}
             size="icon"
             className="h-8 w-8"
@@ -730,10 +732,10 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
             title="Terminal"
           >
             <Terminal className="w-4 h-4" />
-          </Button>
+          </Button>}
 
           {/* New dropdown */}
-          <DropdownMenu>
+          {!terminalOnly && <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="default" size="sm" className="h-8 font-mono text-xs gap-1.5">
                 New <ChevronDown className="w-3 h-3" />
@@ -747,7 +749,7 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
                 <FolderPlus className="w-4 h-4 mr-2" /> New Folder
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu>}
         </div>
       </header>
 
@@ -755,7 +757,7 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* File list — full width when no panel; sidebar when terminal/logs open */}
-        {(rightPanel === null || rightPanel === "terminal" || rightPanel === "logs") && (
+        {!terminalOnly && (rightPanel === null || rightPanel === "terminal" || rightPanel === "logs") && (
           <div className={`flex flex-col min-h-0 overflow-hidden border-r border-border ${
             rightPanelOpen ? "w-64 flex-shrink-0" : "flex-1"
           }`}>
@@ -967,9 +969,9 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
                     </Button>
                   </>
                 )}
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={closeRightPanel}>
+                {!terminalOnly && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={closeRightPanel}>
                   <X className="w-3.5 h-3.5" />
-                </Button>
+                </Button>}
               </div>
             </div>
 
