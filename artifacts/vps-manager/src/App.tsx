@@ -20,6 +20,7 @@ import RemoteFilesPage from "@/pages/remote-files";
 import GithubControlPage from "@/pages/github-control";
 import DeployScriptPage from "@/pages/deploy-script";
 import FirewallPage from "@/pages/firewall";
+import PortsPage from "@/pages/ports";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -116,6 +117,10 @@ function AppRoutes() {
 
       <Route path="/firewall">
         <ProtectedLayout><FirewallPage /></ProtectedLayout>
+      </Route>
+
+      <Route path="/ports">
+        <ProtectedLayout><PortsPage /></ProtectedLayout>
       </Route>
 
       <Route path="/connections/:id/terminal">

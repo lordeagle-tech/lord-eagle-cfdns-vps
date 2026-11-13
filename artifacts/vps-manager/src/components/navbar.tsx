@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import {
   Home, FolderOpen, Terminal, Code2, Globe2, Server,
-  Github, Send, Instagram, HeadphonesIcon, LogOut, Menu, X, Settings, CloudUpload, ShieldCheck,
+  Github, Send, Instagram, HeadphonesIcon, LogOut, Menu, X, Settings, CloudUpload, ShieldCheck, Activity,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/github-control", label: "GitHub Control", icon: Github },
   { href: "/deploy-script", label: "Deploy Script", icon: CloudUpload },
   { href: "/firewall", label: "Firewall", icon: ShieldCheck },
+  { href: "/ports", label: "Ports", icon: Activity },
   { href: "/dns", label: "DNS", icon: Globe2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

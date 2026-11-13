@@ -3,6 +3,7 @@ import { execSync, exec, execFileSync, spawn } from "child_process";
 import os from "os";
 import fs from "fs";
 import path from "path";
+import { parseListeningPorts } from "../lib/ports";
 
 const router = Router();
 
@@ -21,6 +22,25 @@ function formatUptime(seconds: number): string {
   parts.push(`${m}m`);
   return parts.join(" ");
 }
+
+router.get("/system/ports", (_req, res) => {
+  try {
+    const output = execFileSync("ss", ["-H", "-lntup"], {
+      timeout: 7000,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      server: { hostname: os.hostname(), scope: "local" },
+      ports: parseListeningPorts(output),
+      scannedAt: new Date().toISOString(),
+      note: "These are listening sockets. A host, cloud-provider, or network firewall may still block external access; process names for other users may be hidden.",
+    });
+  } catch {
+    res.status(503).json({ error: "Could not read socket status. This Linux host needs the `ss` utility installed." });
+  }
+});
 
 router.get("/system/info", async (_req, res) => {
   try {

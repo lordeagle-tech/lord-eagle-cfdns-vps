@@ -16,6 +16,7 @@ import remoteFilesRouter from "./remote-files";
 import auditLogRouter from "./audit-log";
 import deploymentsRouter from "./deployments";
 import firewallRouter from "./firewall";
+import portsRouter from "./ports";
 import { requireApiKey, requireAdmin } from "../middleware/auth";
 
 const router: IRouter = Router();
@@ -29,6 +30,7 @@ router.use(githubRouter);
 router.use(githubControlRouter);
 router.use(deploymentsRouter);
 router.use(firewallRouter);
+router.use(portsRouter);
 router.use(githubSshRouter);
 router.use(settingsRouter);
 router.use(auditLogRouter);
