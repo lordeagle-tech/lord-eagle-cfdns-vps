@@ -66,12 +66,17 @@ export function Navbar() {
         </Link>
 
         {/* Desktop nav links */}
-        <div className="hidden md:flex items-center gap-1 flex-1">
+        <div
+          className="hidden md:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
+          role="region"
+          aria-label="Page navigation links; scroll horizontally if needed"
+          tabIndex={0}
+        >
           {NAV_LINKS.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className={`dashboard-nav-link flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              className={`dashboard-nav-link flex-shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 isActive(href)
                   ? "dashboard-nav-active"
                   : "text-muted-foreground"
@@ -138,7 +143,11 @@ export function Navbar() {
           style={{ background: "rgba(14,16,18,.96)", backdropFilter: "blur(20px)" }}
           onClick={() => setMobileOpen(false)}
         >
-          <div className="p-4 space-y-1" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-1"
+            onClick={(e) => e.stopPropagation()}
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {NAV_LINKS.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
@@ -154,7 +163,7 @@ export function Navbar() {
               </Link>
             ))}
             <div className="h-px bg-border my-3" />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {SOCIAL_LINKS.map(({ href, label, icon: Icon }) => (
                 <a
                   key={href}
