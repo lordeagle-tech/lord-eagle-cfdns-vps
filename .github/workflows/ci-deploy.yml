@@ -1,0 +1,166 @@
+name: Validate and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.0
+          run_install: false
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate shell scripts
+        run: bash -n scripts/install-self-hosted.sh scripts/enable-auto-deploy.sh scripts/update-self-hosted.sh
+
+      - name: Typecheck workspace
+        run: pnpm run typecheck
+
+      - name: Build API
+        run: pnpm --filter @workspace/api-server run build
+
+      - name: Build frontend
+        run: pnpm --filter @workspace/vps-manager run build
+
+  deploy:
+    name: Deploy to self-hosted VPS
+    needs: validate
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: cfdns-manager-production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check deployment configuration
+        id: deploy-config
+        env:
+          CFDNS_DEPLOY_HOST: ${{ secrets.CFDNS_DEPLOY_HOST }}
+          CFDNS_DEPLOY_USER: ${{ secrets.CFDNS_DEPLOY_USER }}
+          CFDNS_DEPLOY_SSH_KEY: ${{ secrets.CFDNS_DEPLOY_SSH_KEY }}
+          CFDNS_DEPLOY_HOST_FINGERPRINT: ${{ secrets.CFDNS_DEPLOY_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${CFDNS_DEPLOY_HOST:-}" ]] || missing+=(CFDNS_DEPLOY_HOST)
+          [[ -n "${CFDNS_DEPLOY_USER:-}" ]] || missing+=(CFDNS_DEPLOY_USER)
+          [[ -n "${CFDNS_DEPLOY_SSH_KEY:-}" ]] || missing+=(CFDNS_DEPLOY_SSH_KEY)
+          [[ -n "${CFDNS_DEPLOY_HOST_FINGERPRINT:-}" ]] || missing+=(CFDNS_DEPLOY_HOST_FINGERPRINT)
+          if ((${#missing[@]})); then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '### Auto-deploy skipped'
+              echo 'Builds passed, but these repository Actions secrets are not configured yet:'
+              printf -- '- `%s`\n' "${missing[@]}"
+              echo 'See the README section **Automatic GitHub deployments** to enable deployment.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo '::notice::Auto-deploy skipped because required VPS Actions secrets are missing.'
+          else
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify VPS identity and deploy this commit
+        if: steps.deploy-config.outputs.ready == 'true'
+        env:
+          CFDNS_DEPLOY_HOST: ${{ secrets.CFDNS_DEPLOY_HOST }}
+          CFDNS_DEPLOY_PORT: ${{ secrets.CFDNS_DEPLOY_PORT }}
+          CFDNS_DEPLOY_USER: ${{ secrets.CFDNS_DEPLOY_USER }}
+          CFDNS_DEPLOY_SSH_KEY: ${{ secrets.CFDNS_DEPLOY_SSH_KEY }}
+          CFDNS_DEPLOY_HOST_FINGERPRINT: ${{ secrets.CFDNS_DEPLOY_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          SHA="$GITHUB_SHA"
+          HOST="$CFDNS_DEPLOY_HOST"
+          USER_NAME="$CFDNS_DEPLOY_USER"
+          PORT="${CFDNS_DEPLOY_PORT:-22}"
+          FINGERPRINT="$CFDNS_DEPLOY_HOST_FINGERPRINT"
+
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Unexpected commit SHA.' >&2; exit 1; }
+          [[ "$HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo 'Host must be a hostname or IPv4 address (no scheme or port).' >&2; exit 1; }
+          [[ "$USER_NAME" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo 'Deploy user must be a simple Linux account name.' >&2; exit 1; }
+          [[ "$PORT" =~ ^[0-9]{1,5}$ ]] && ((10#$PORT >= 1 && 10#$PORT <= 65535)) || { echo 'Invalid SSH port.' >&2; exit 1; }
+          [[ "$FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]] || { echo 'Host fingerprint must use OpenSSH SHA256 format.' >&2; exit 1; }
+
+          WORK_DIR="$(mktemp -d)"
+          trap 'rm -rf -- "$WORK_DIR"' EXIT
+          KEY_FILE="$WORK_DIR/deploy_key"
+          SCAN_FILE="$WORK_DIR/scanned_hosts"
+          VERIFIED_HOSTS="$WORK_DIR/known_hosts"
+          ONE_KEY="$WORK_DIR/one_key"
+          printf '%s\n' "$CFDNS_DEPLOY_SSH_KEY" > "$KEY_FILE"
+          chmod 0600 "$KEY_FILE"
+
+          if ! ssh-keyscan -T 10 -p "$PORT" "$HOST" > "$SCAN_FILE" 2>/dev/null; then
+            echo 'Could not obtain the VPS SSH host key.' >&2
+            exit 1
+          fi
+          : > "$VERIFIED_HOSTS"
+          while IFS= read -r key_line; do
+            [[ -n "$key_line" && "$key_line" != \#* ]] || continue
+            printf '%s\n' "$key_line" > "$ONE_KEY"
+            key_fingerprint="$(ssh-keygen -lf "$ONE_KEY" -E sha256 2>/dev/null | awk 'NR == 1 { print $2 }' || true)"
+            if [[ "$key_fingerprint" == "$FINGERPRINT" ]]; then
+              printf '%s\n' "$key_line" >> "$VERIFIED_HOSTS"
+            fi
+          done < "$SCAN_FILE"
+          [[ -s "$VERIFIED_HOSTS" ]] || { echo 'Scanned VPS host key did not match the configured pinned fingerprint.' >&2; exit 1; }
+
+          git archive --format=tar "$SHA" | gzip -n > "$WORK_DIR/release.tar.gz"
+          TARGET="${USER_NAME}@${HOST}"
+          REMOTE_ARCHIVE="/var/tmp/cfdns-manager-${SHA}.tar.gz"
+          REMOTE_DIR="/var/tmp/cfdns-manager-deploy-${SHA}"
+          COMMON_SSH_OPTS=(-i "$KEY_FILE" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$VERIFIED_HOSTS" -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=15)
+
+          scp -i "$KEY_FILE" -P "$PORT" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$VERIFIED_HOSTS" -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+            "$WORK_DIR/release.tar.gz" "${TARGET}:${REMOTE_ARCHIVE}"
+
+          ssh "${COMMON_SSH_OPTS[@]}" -p "$PORT" "$TARGET" "bash -s -- '$SHA' '$REMOTE_ARCHIVE' '$REMOTE_DIR'" <<'REMOTE'
+          set -Eeuo pipefail
+          sha="$1"
+          archive="$2"
+          release_dir="$3"
+          [[ "$sha" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid release SHA.' >&2; exit 1; }
+          [[ "$archive" == "/var/tmp/cfdns-manager-${sha}.tar.gz" ]] || { echo 'Unexpected archive path.' >&2; exit 1; }
+          [[ "$release_dir" == "/var/tmp/cfdns-manager-deploy-${sha}" ]] || { echo 'Unexpected release path.' >&2; exit 1; }
+          rm -rf -- "$release_dir"
+          mkdir -m 0700 -- "$release_dir"
+          cleanup() { rm -rf -- "$release_dir" "$archive"; }
+          trap cleanup EXIT
+          tar -xzf "$archive" -C "$release_dir"
+          sudo -n /usr/local/sbin/cfdns-manager-update "$sha"
+          REMOTE
+
+          {
+            echo '### Auto-deploy complete'
+            echo "Deployed commit \\`$SHA\\` to \\`$HOST\\`. The VPS updater performed its health check and retained a code rollback copy."
+          } >> "$GITHUB_STEP_SUMMARY"

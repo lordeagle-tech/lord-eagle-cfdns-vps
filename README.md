@@ -134,6 +134,36 @@ The installer prompts for the domain and certificate email, installs Node.js, Ma
 
 To connect that VPS to GitHub, sign in to the deployed panel and open **Developer Hub → VPS → GitHub Connection**. Copy the displayed public key, enter the target repository as `owner/repository`, then open its GitHub **Settings → Deploy keys** page and add the key. Keep the deploy key read-only unless this VPS must push to that repository. Return to the panel and run the test; it verifies both SSH authentication and read access to the selected repository. The GitHub key setup API returns only the public key; authorized local terminal commands run as the same service account and should be available only to trusted admins. On an existing manual installation, configure `CFDNS_ENABLE_GITHUB_SSH=true`, `GITHUB_SSH_KEY_PATH`, and `GITHUB_SSH_KNOWN_HOSTS`, ensure the service can write the configured key directory, and restart it before using the panel's generate-key fallback.
 
+### Automatic GitHub deployments
+
+`.github/workflows/ci-deploy.yml` runs typechecks and production builds for pull requests and pushes to `main`. After a successful build, each push to `main` deploys that exact commit to the configured self-hosted VPS. Pull requests never deploy. If deployment secrets are missing, the workflow reports that deployment was skipped while still running the build checks. You can also use **Actions → Validate and deploy → Run workflow** to deploy the latest `main` commit after configuring the secrets.
+
+Use a dedicated SSH login account for Actions—never SSH as `root` or the `cfdns` service account. On a trusted machine, generate a passphrase-less Ed25519 key pair dedicated to this workflow; store the private key only in GitHub Actions secrets (Actions cannot answer a passphrase prompt):
+
+```bash
+ssh-keygen -t ed25519 -N '' -C cfdns-github-actions -f cfdns-deploy
+```
+
+On the VPS, create a dedicated login account if you do not already have one, and authorize only the public key:
+
+```bash
+sudo useradd --user-group --create-home --shell /bin/bash cfdns-deploy
+sudo install -d -o cfdns-deploy -g cfdns-deploy -m 0700 /home/cfdns-deploy/.ssh
+sudo install -o cfdns-deploy -g cfdns-deploy -m 0600 /path/to/cfdns-deploy.pub /home/cfdns-deploy/.ssh/authorized_keys
+```
+
+Replace `/path/to/cfdns-deploy.pub` with the public key file location. From a current checkout of this repository on the VPS, enable the restricted updater:
+
+```bash
+sudo bash scripts/enable-auto-deploy.sh cfdns-deploy
+```
+
+Replace `cfdns-deploy` with the Linux account you authorized. The setup installs a root-owned updater and grants that account sudo permission only to the updater; the updater validates the commit SHA and builds application code as the unprivileged `cfdns` user. Fresh installations also install the updater, but still require this one-time SSH-user/sudo setup.
+
+In the repository's **Settings → Secrets and variables → Actions**, add `CFDNS_DEPLOY_HOST` (hostname or IPv4 address, without `https://`), `CFDNS_DEPLOY_USER`, `CFDNS_DEPLOY_SSH_KEY` (the private key, stored only as a GitHub secret), and `CFDNS_DEPLOY_HOST_FINGERPRINT`. The port secret `CFDNS_DEPLOY_PORT` is optional and defaults to `22`. Obtain the expected SHA256 host fingerprint from the VPS console with `sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256`; the workflow compares it with the scanned key and refuses to connect on a mismatch. Never copy the private key into the repository or chat.
+
+Before replacing code, the updater builds the release and creates the existing root-only database/secrets backup plus an independent root-only copy of the installed app for rollback. It checks for enough free disk space before stopping the service; the code snapshot needs roughly the space used by the current app. It then preserves the production environment and app data, restarts the service, and checks `/api/healthz`. If the new code fails that check, it restores the previous code and restarts it. The pipeline does not run `drizzle-kit push` or force database schema changes; treat any schema migration as a separate reviewed operation. Configure these GitHub secrets only after confirming the VPS and deployment account are correct—once configured, successful commits to `main` deploy automatically.
+
 For account-level repository management, open **GitHub Control** and connect once with a GitHub classic personal access token scoped to `repo` and `delete_repo`. Use HTTPS to access the panel, choose an expiration date, and never paste the token into chat or commit it to the repository. The panel validates the token against GitHub, stores an AES-256-GCM encrypted copy per administrator in MariaDB, and never returns the token to the browser; disconnect removes this stored copy but does not revoke the token at GitHub. Keep `APP_ENCRYPTION_KEY` backed up securely: losing it prevents decryption. The control panel lists repositories owned by the connected GitHub account, creates repositories private by default, edits repository settings, browses branches/files, and commits text-file changes directly to the selected branch. Repository deletion requires typing its exact name, file removal creates a GitHub commit, and all repository/file mutations are recorded in the audit log. This credential grants broad repository authority; only trusted panel admins should be allowed to use it, and the token should be revoked in GitHub when no longer needed.
 
 To run a reviewed repository script on a saved VPS, open **Deploy Script**, select a pinned SSH connection, repository, branch and `.sh` file, then inspect the complete script and its SHA-256 before confirming the VPS ID. At execution, the server re-fetches the GitHub file and refuses to run it if its blob or checksum changed. It transfers the script into a private temporary directory on the target VPS, executes it as the saved SSH username (without automatic `sudo`), returns bounded output, and records the operation in the audit log. The remote run is limited to ten minutes. Scripts can still make irreversible changes, install software or trigger DNS/provider operations: review every line, use a least-privilege SSH account and test on a non-production VPS first. No environment secrets are passed into the script automatically, and the workflow is disabled in shared Preview/development. Use the existing **DNS** page separately to manage Cloudflare records; DNS changes are not inferred or applied automatically by a script deployment.

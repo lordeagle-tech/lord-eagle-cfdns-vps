@@ -114,6 +114,7 @@ info "Installing project files and building the production app"
 install -d -o "$APP_USER" -g "$APP_USER" "$APP_DIR"
 rsync -a --exclude='.git' --exclude='.env' --exclude='.env.*' --exclude='node_modules' --exclude='**/node_modules' --exclude='artifacts/*/dist' "$SOURCE_DIR/" "$APP_DIR/"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+install -o root -g root -m 0750 "$APP_DIR/scripts/update-self-hosted.sh" /usr/local/sbin/cfdns-manager-update
 runuser -u "$APP_USER" -- env HOME="$APP_HOME" bash -lc 'cd /opt/cfdns-manager && pnpm install --frozen-lockfile && pnpm --filter @workspace/vps-manager run build && pnpm --filter @workspace/api-server run build'
 
 info "Writing root-managed app configuration and systemd service"
