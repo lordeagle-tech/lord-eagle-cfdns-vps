@@ -13,6 +13,10 @@
 
 </div>
 
+<p align="center">
+  <img src="docs/screenshots/cfdns-manager-login.webp" alt="CFDNS Manager sign-in screen with a network-themed background" width="893">
+</p>
+
 > Understand the attack. Improve the defense. Operate your DNS, servers, and deployments from one focused control plane.
 
 CFDNS Manager combines Cloudflare DNS operations with direct VPS administration in a single web service. It is designed for self-hosted infrastructure teams, developers, and operators who need fast visibility without switching between five dashboards.
