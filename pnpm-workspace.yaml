@@ -161,4 +161,5 @@ overrides:
 allowBuilds:
   cpu-features: true
   esbuild: true
+  node-pty: true
   ssh2: true

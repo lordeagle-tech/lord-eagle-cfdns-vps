@@ -51,7 +51,7 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
     proxy: {
-      "/api": { target: "http://127.0.0.1:3001", changeOrigin: true },
+      "/api": { target: "http://127.0.0.1:3001", changeOrigin: true, ws: true },
     },
     fs: {
       strict: true,

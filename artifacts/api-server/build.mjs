@@ -42,6 +42,8 @@ async function buildAll() {
       "bufferutil",
       "utf-8-validate",
       "ssh2",
+      "node-pty",
+      "ws",
       "cpu-features",
       "dtrace-provider",
       "isolated-vm",

@@ -17,6 +17,7 @@ ENV_FILE="/etc/cfdns-manager.env"
 SERVICE_FILE="/etc/systemd/system/cfdns-manager.service"
 NGINX_AVAILABLE="/etc/nginx/sites-available/cfdns-manager"
 NGINX_ENABLED="/etc/nginx/sites-enabled/cfdns-manager"
+NGINX_WS_MAP="/etc/nginx/conf.d/cfdns-manager-websocket.conf"
 CREDENTIALS_FILE="/root/cfdns-manager-credentials.txt"
 DB_NAME="cfdns_manager"
 DB_USER="cfdns_app"
@@ -34,7 +35,7 @@ fi
 [[ ! -e "$APP_DIR" ]] || fail "$APP_DIR already exists. This installer only initializes a fresh install and will not overwrite it."
 [[ ! -e "$ENV_FILE" ]] || fail "$ENV_FILE already exists. Refusing to replace production credentials."
 [[ ! -e "$API_KEY_FILE" ]] || fail "$API_KEY_FILE already exists. Refusing to overwrite an existing access key."
-[[ ! -e "$SERVICE_FILE" && ! -e "$NGINX_AVAILABLE" ]] || fail "A CFDNS Manager service or Nginx site already exists; refusing to overwrite it."
+[[ ! -e "$SERVICE_FILE" && ! -e "$NGINX_AVAILABLE" && ! -e "$NGINX_WS_MAP" ]] || fail "A CFDNS Manager service or Nginx site already exists; refusing to overwrite it."
 
 source /etc/os-release
 case "${ID:-}" in
@@ -60,7 +61,7 @@ SOURCE_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
 info "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl gnupg git openssh-client rsync nginx mariadb-server certbot python3-certbot-nginx
+apt-get install -y ca-certificates curl gnupg git openssh-client rsync nginx mariadb-server certbot python3-certbot-nginx build-essential python3
 
 info "Installing Node.js 22 from the signed NodeSource repository"
 install -d -m 0755 /etc/apt/keyrings
@@ -186,6 +187,13 @@ systemctl daemon-reload
 systemctl enable --now "$APP_NAME"
 
 info "Configuring Nginx and requesting HTTPS"
+cat > "$NGINX_WS_MAP" <<'NGINX_MAP'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+NGINX_MAP
+chmod 0644 "$NGINX_WS_MAP"
 cat > "$NGINX_AVAILABLE" <<NGINX
 server {
     listen 80;
@@ -199,6 +207,8 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
         proxy_read_timeout 3600;
     }
 }

@@ -8,7 +8,7 @@ import {
   useRenameFile,
   useExecCommand,
 } from "@workspace/api-client-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import {
@@ -40,6 +40,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+
+const InteractiveTerminal = lazy(() => import("@/components/interactive-terminal"));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -128,6 +130,7 @@ interface FileManagerProps {
 }
 
 export default function FileManager({ initialPanel = null }: FileManagerProps) {
+  const terminalOnly = initialPanel === "terminal";
   const searchString = useSearch();
   const [, navigate] = useLocation();
   const searchParams = new URLSearchParams(searchString);
@@ -175,7 +178,7 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
 
   const { data: listing, isLoading, error: listError, refetch } = useListFiles(
     { path: currentPath },
-    { query: { queryKey: getListFilesQueryKey({ path: currentPath }) } }
+    { query: { queryKey: getListFilesQueryKey({ path: currentPath }), enabled: !terminalOnly } }
   );
 
   const fileKind: MediaKind | null = selectedFile
@@ -530,7 +533,6 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
   const crumbs = currentPath.split("/").filter(Boolean);
   const isPending = mkdirMut.isPending || newFileMut.isPending || renameMut.isPending;
   const rightPanelOpen = rightPanel !== null;
-  const terminalOnly = initialPanel === "terminal";
 
   // ── File list (reused in main view + drawer) ──────────────────────────────
 
@@ -670,7 +672,7 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
           </Button>
         )}
 
-        {terminalOnly && <div className="flex flex-1 items-center gap-2 font-mono text-sm text-cyan-200"><Terminal className="h-4 w-4" />VPS Terminal <span className="ml-2 truncate text-xs text-muted-foreground">{termCwd}</span></div>}
+        {terminalOnly && <div className="flex flex-1 items-center gap-2 font-mono text-sm text-cyan-200"><Terminal className="h-4 w-4" />VPS Terminal</div>}
         {/* Breadcrumb */}
         {!terminalOnly && <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto scrollbar-none font-mono text-sm">
           <Button
@@ -937,8 +939,10 @@ export default function FileManager({ initialPanel = null }: FileManagerProps) {
           </div>
         )}
 
+        {terminalOnly && rightPanel === "terminal" && <Suspense fallback={<div className="flex flex-1 items-center justify-center font-mono text-sm text-muted-foreground">Loading terminal…</div>}><InteractiveTerminal /></Suspense>}
+
         {/* ── Terminal (inline panel) ── */}
-        {rightPanel === "terminal" && (
+        {!terminalOnly && rightPanel === "terminal" && (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Terminal header */}
             <div className="h-12 border-b border-border bg-card/40 flex items-center justify-between px-4 flex-shrink-0 gap-3">
