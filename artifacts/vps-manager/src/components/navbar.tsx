@@ -69,10 +69,10 @@ export function Navbar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              className={`dashboard-nav-link flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 isActive(href)
-                  ? "text-foreground bg-white/5"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  ? "dashboard-nav-active"
+                  : "text-muted-foreground"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -142,10 +142,10 @@ export function Navbar() {
                 key={href}
                 href={href}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                className={`dashboard-nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                   isActive(href)
-                    ? "text-foreground bg-white/5"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "dashboard-nav-active"
+                    : "text-muted-foreground"
                 }`}
               >
                 <Icon className="w-4 h-4" /> {label}

@@ -194,28 +194,60 @@
 /* Authenticated dashboard theme: clean graphite surfaces with a restrained amber signal. */
 @layer utilities {
   .dashboard-theme {
-    --dashboard-bg: #0e1012;
-    --dashboard-surface: #15181b;
-    --dashboard-surface-raised: #1b1f22;
-    --dashboard-line: rgba(231, 187, 125, .12);
-    --dashboard-amber: #e6ad68;
-    --dashboard-amber-soft: #f0c58f;
+    --dashboard-bg: #0c0e11;
+    --dashboard-surface: #171a1e;
+    --dashboard-surface-raised: #20242a;
+    --dashboard-line: rgba(245, 181, 91, .22);
+    --dashboard-amber: #f5b65b;
+    --dashboard-amber-soft: #ffd28a;
+    --background: 220 14% 6%;
+    --foreground: 40 18% 93%;
+    --card: 220 12% 10%;
+    --card-foreground: 40 18% 93%;
+    --card-border: 38 54% 36% / .32;
+    --popover: 220 12% 12%;
+    --popover-foreground: 40 18% 93%;
+    --popover-border: 38 54% 36% / .38;
+    --primary: 38 91% 61%;
+    --primary-foreground: 220 18% 10%;
+    --secondary: 220 10% 16%;
+    --secondary-foreground: 40 18% 93%;
+    --muted: 220 9% 16%;
+    --muted-foreground: 38 12% 68%;
+    --accent: 220 10% 19%;
+    --accent-foreground: 40 18% 95%;
+    --border: 38 32% 42% / .28;
+    --input: 220 10% 13%;
+    --ring: 38 91% 61%;
+    --sidebar: 220 16% 7%;
+    --sidebar-foreground: 40 18% 93%;
+    --sidebar-border: 38 32% 42% / .24;
+    --sidebar-primary: 38 91% 61%;
+    --sidebar-primary-foreground: 220 18% 10%;
+    --sidebar-accent: 220 10% 17%;
+    --sidebar-accent-foreground: 40 18% 93%;
     background-color: var(--dashboard-bg);
-    background-image: radial-gradient(ellipse 78% 45% at 50% -12%, rgba(230,173,104,.075), transparent 72%);
+    background-image:
+      radial-gradient(ellipse 78% 52% at 9% -8%, rgba(245,182,91,.19), transparent 70%),
+      radial-gradient(ellipse 65% 55% at 100% 100%, rgba(47,137,124,.16), transparent 72%),
+      radial-gradient(ellipse 55% 42% at 78% 20%, rgba(91,111,154,.09), transparent 75%);
     color: #e9e6e0;
     accent-color: var(--dashboard-amber);
   }
   .dashboard-theme .ops-panel {
-    background: linear-gradient(145deg, rgba(27,31,34,.98), rgba(20,23,26,.98));
+    background: linear-gradient(145deg, rgba(34,38,43,.98), rgba(21,24,28,.98));
     border-color: var(--dashboard-line);
-    box-shadow: 0 12px 34px rgba(0,0,0,.18);
+    box-shadow: 0 14px 38px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035);
   }
-  .dashboard-theme .loop-surface { background: var(--dashboard-surface); border: 1px solid var(--dashboard-line); border-radius: 20px; }
-  .dashboard-theme .loop-surface-strong { background: var(--dashboard-surface-raised); border: 1px solid rgba(231,187,125,.2); border-radius: 20px; }
+  .dashboard-theme .loop-surface { background: linear-gradient(145deg, rgba(29,33,38,.96), rgba(19,22,26,.96)); border: 1px solid var(--dashboard-line); border-radius: 20px; }
+  .dashboard-theme .loop-surface-strong { background: linear-gradient(145deg, rgba(39,43,49,.98), rgba(25,29,34,.98)); border: 1px solid rgba(245,181,91,.34); border-radius: 20px; }
   .dashboard-theme .loop-accent { color: var(--dashboard-amber); }
-  .dashboard-theme .loop-label { color: #a39c91; font-family: var(--app-font-mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+  .dashboard-theme .loop-label { color: #c0b29c; font-family: var(--app-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
   .dashboard-theme .ops-kicker { color: var(--dashboard-amber); }
-  .dashboard-theme .status-pulse { background: var(--dashboard-amber); box-shadow: 0 0 0 4px rgba(230,173,104,.1), 0 0 14px rgba(230,173,104,.48); }
+  .dashboard-theme .status-pulse { background: var(--dashboard-amber); box-shadow: 0 0 0 4px rgba(245,182,91,.16), 0 0 16px rgba(245,182,91,.7); }
+  .dashboard-theme .dashboard-nav-active { color: #ffd28a; background: linear-gradient(135deg, rgba(245,182,91,.2), rgba(245,182,91,.08)); box-shadow: inset 0 0 0 1px rgba(245,182,91,.3), 0 4px 18px rgba(245,182,91,.08); }
+  .dashboard-theme .dashboard-nav-link { transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+  .dashboard-theme .dashboard-nav-link:hover { color: #ffd28a; background: rgba(245,182,91,.1); }
   .dashboard-theme input:not([type="checkbox"]), .dashboard-theme textarea, .dashboard-theme select {
     background-color: rgba(12,14,16,.82);
     border-color: rgba(231,187,125,.14);
