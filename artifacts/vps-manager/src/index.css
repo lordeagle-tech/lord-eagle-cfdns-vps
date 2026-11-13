@@ -251,6 +251,8 @@
   .dashboard-theme .dashboard-nav-link:hover { color: #ffd28a; background: rgba(245,182,91,.1); }
   /* Keep the ambient color visible behind each authenticated page's content. */
   .dashboard-theme main > .flex-1 {
+    position: relative;
+    isolation: isolate;
     background-image:
       radial-gradient(ellipse 78% 55% at 8% 0%, rgba(245,182,91,.32), transparent 72%),
       radial-gradient(ellipse 68% 58% at 96% 100%, rgba(34,211,238,.27), transparent 72%),
@@ -264,12 +266,32 @@
     background-repeat: no-repeat, no-repeat, repeat, repeat, repeat, no-repeat;
     animation: dashboard-backdrop-drift 24s ease-in-out infinite alternate;
   }
+  .dashboard-theme main > .flex-1::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(ellipse 58% 48% at 12% 18%, rgba(255,190,92,.46), transparent 74%),
+      radial-gradient(ellipse 58% 54% at 86% 74%, rgba(34,211,238,.4), transparent 72%),
+      radial-gradient(ellipse 42% 46% at 66% 14%, rgba(76,125,255,.2), transparent 72%);
+    background-size: 145% 145%, 150% 150%, 150% 150%;
+    background-position: 0% 0%, 100% 100%, 50% 0%;
+    background-repeat: no-repeat;
+    animation: dashboard-aurora-drift 18s ease-in-out infinite alternate;
+  }
   @keyframes dashboard-backdrop-drift {
     from { background-position: 0% 0%, 100% 100%, 0 0, 0 0, 0 0, 0 0; }
     to { background-position: 100% 55%, 0% 45%, 32px 32px, 64px 64px, -64px 64px, 0 0; }
   }
+  @keyframes dashboard-aurora-drift {
+    from { background-position: 0% 0%, 100% 100%, 50% 0%; opacity: .72; }
+    to { background-position: 100% 45%, 0% 42%, 12% 100%; opacity: 1; }
+  }
   @media (prefers-reduced-motion: reduce) {
-    .dashboard-theme main > .flex-1 { animation: none; }
+    .dashboard-theme main > .flex-1,
+    .dashboard-theme main > .flex-1::before { animation: none; }
   }
   .dashboard-theme input:not([type="checkbox"]), .dashboard-theme textarea, .dashboard-theme select {
     background-color: rgba(12,14,16,.82);
