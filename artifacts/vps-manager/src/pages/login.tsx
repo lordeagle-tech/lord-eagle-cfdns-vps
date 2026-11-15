@@ -22,7 +22,7 @@ export default function LoginPage() {
     if (!result.ok) { setScanPhase("idle"); setError(result.error ?? "Authentication failed"); }
   }
 
-  return <div className="relative min-h-full overflow-y-auto flex items-center justify-center px-4" style={{ background: "#0b0b0c" }}>
+  return <div className="relative min-h-full overflow-y-auto flex items-center justify-center px-4 py-5 sm:px-6 sm:py-8" style={{ background: "#0b0b0c" }}>
     <div className="pointer-events-none fixed inset-0" style={{ background: "radial-gradient(ellipse 65% 55% at 50% -10%, rgba(255,90,31,.2), transparent 70%)" }} />
     <div className="loop-login-network loop-network-visual" aria-hidden="true">
       <svg className="loop-network-links" viewBox="0 0 1000 700" preserveAspectRatio="none">
@@ -84,14 +84,14 @@ export default function LoginPage() {
       <div className="loop-network-node loop-network-node-five"><span />EDGE / 05</div>
     </div>
     <div className="relative z-10 w-full max-w-[360px]">
-      <div className="text-center mb-9">
+      <div className="text-center mb-6 sm:mb-9">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5" style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", padding: 2 }}>
           <div className="w-full h-full rounded-2xl flex items-center justify-center" style={{ background: "#0b0b0c" }}><span className="text-sm font-black brand-gradient">LE</span></div>
         </div>
         <h1 className="text-2xl font-black tracking-tight"><span className="brand-gradient">CFDNS</span> <span className="text-foreground">MANAGER</span></h1>
         <p className="text-sm text-muted-foreground mt-2">Domains and servers, in one control plane. Built by Lord Eagle.</p>
       </div>
-      <div className="loop-float-card rounded-2xl px-7 py-9 min-h-[300px] flex flex-col justify-center" style={{ background: "#111113", border: "1px solid rgba(255,90,31,.22)", boxShadow: "0 0 60px rgba(255,90,31,.12)" }}>
+      <div className="loop-float-card rounded-2xl px-5 py-7 sm:px-7 sm:py-9 min-h-[280px] sm:min-h-[300px] flex flex-col justify-center" style={{ background: "#111113", border: "1px solid rgba(255,90,31,.22)", boxShadow: "0 0 60px rgba(255,90,31,.12)" }}>
         {scanPhase !== "idle" && <div className={`loop-scan-overlay ${scanPhase === "granted" ? "is-granted" : ""}`} role="status" aria-live="polite">
           <div className="loop-scan-eye" aria-hidden="true">
             <div className="loop-scan-orbit loop-scan-orbit-one" />
