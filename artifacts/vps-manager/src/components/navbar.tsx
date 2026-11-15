@@ -67,7 +67,7 @@ export function Navbar() {
 
         {/* Desktop nav links */}
         <div
-          className="hidden md:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
+          className="hidden xl:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
           role="region"
           aria-label="Page navigation links; scroll horizontally if needed"
           tabIndex={0}
@@ -89,10 +89,10 @@ export function Navbar() {
         </div>
 
         {/* Spacer for mobile */}
-        <div className="flex-1 md:hidden" />
+        <div className="flex-1 xl:hidden" />
 
         {/* Social + Avatar + Logout */}
-        <div className="hidden md:flex items-center gap-1">
+        <div className="hidden xl:flex items-center gap-1">
           {SOCIAL_LINKS.map(({ href, label, icon: Icon }) => (
             <a
               key={href}
@@ -129,8 +129,11 @@ export function Navbar() {
 
         {/* Mobile menu toggle */}
         <button
-          className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground"
+          className="xl:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground"
           onClick={() => setMobileOpen((o) => !o)}
+          aria-label={mobileOpen ? "Close page navigation" : "Open page navigation"}
+          aria-expanded={mobileOpen}
+          aria-controls="page-navigation-drawer"
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -139,6 +142,7 @@ export function Navbar() {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div
+          id="page-navigation-drawer"
           className="fixed inset-0 z-40 pt-14 flex flex-col"
           style={{ background: "rgba(14,16,18,.96)", backdropFilter: "blur(20px)" }}
           onClick={() => setMobileOpen(false)}

@@ -299,7 +299,7 @@ export default function HomePage() {
     <div className="flex-1 overflow-y-auto" style={{ background: "#0e1012" }}>
       {/* Hero / quick actions */}
       <div
-        className="relative overflow-hidden px-6 py-8"
+        className="relative overflow-hidden px-4 py-6 sm:px-6 sm:py-8"
         style={{
           background: "radial-gradient(ellipse 78% 100% at 12% 0%, rgba(245,182,91,.25) 0%, transparent 68%), radial-gradient(ellipse 62% 90% at 92% 24%, rgba(47,137,124,.18) 0%, transparent 72%), linear-gradient(145deg, rgba(24,28,32,.76), rgba(12,14,17,.2))",
         }}
@@ -410,7 +410,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="max-w-screen-xl mx-auto px-6 pb-8 space-y-8">
+      <div className="max-w-screen-xl mx-auto px-4 pb-8 space-y-6 sm:px-6 sm:space-y-8">
         {/* Top stat cards */}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -686,7 +686,8 @@ export default function HomePage() {
               <p className="text-sm text-muted-foreground">No PM2 processes running.</p>
             </div>
           ) : (
-            <div className="ops-panel rounded-2xl overflow-hidden"
+            <>
+            <div className="ops-panel hidden lg:block rounded-2xl overflow-hidden"
               style={{ background: "#15181b", border: "1px solid rgba(230,173,104,.18)" }}>
               {/* Table header */}
               <div className="grid grid-cols-12 gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60"
@@ -744,6 +745,29 @@ export default function HomePage() {
                 );
               })}
             </div>
+            <div className="space-y-2 lg:hidden">
+              {pm2Processes.map((proc) => {
+                const isOnline = proc.status === "online";
+                const isStopped = proc.status === "stopped";
+                const StatusIcon = isOnline ? CheckCircle2 : isStopped ? XCircle : AlertCircle;
+                const statusColor = isOnline ? "#f0c58f" : isStopped ? "#ff6b6b" : "#f59e0b";
+                return (
+                  <button key={proc.id} type="button" onClick={() => navigate(`/pm2/${encodeURIComponent(proc.name)}`)}
+                    className="ops-panel flex w-full min-w-0 items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-white/[.04]">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{proc.name}</p>
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">{proc.script ? proc.script.split("/").pop() : proc.interpreter}</p>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                        <span>CPU {proc.cpu.toFixed(1)}%</span><span>Memory {fmtBytes(proc.memory)}</span><span>{proc.restarts} restarts</span>
+                      </div>
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold capitalize" style={{ color: statusColor }}><StatusIcon className="h-3.5 w-3.5" />{proc.status}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  </button>
+                );
+              })}
+            </div>
+            </>
           )}
         </section>
 

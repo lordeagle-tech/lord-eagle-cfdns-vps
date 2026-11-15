@@ -77,9 +77,9 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage administrator access and security</p>
         </div>
 
-        <section className="rounded-2xl border p-5 space-y-4" style={{ background: "rgba(230,173,104,.05)", borderColor: "rgba(230,173,104,.18)" }}>
+        <section className="rounded-2xl border p-4 sm:p-5 space-y-4" style={{ background: "rgba(230,173,104,.05)", borderColor: "rgba(230,173,104,.18)" }}>
           <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-300" /><span className="text-sm font-semibold">Administrator login key</span></div>
-          <code className="block px-4 py-3 rounded-xl font-mono text-sm tracking-widest bg-black/20">{loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin inline" /> : maskedKey}</code>
+          <code className="block break-all px-3 py-3 sm:px-4 rounded-xl font-mono text-xs sm:text-sm tracking-widest bg-black/20">{loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin inline" /> : maskedKey}</code>
           <p className="text-xs text-muted-foreground">The key is only used to start a browser session. It cannot authenticate ordinary API requests directly.</p>
           <Button onClick={rotateKey} disabled={busy} className="gap-2 font-semibold"><KeyRound className="w-4 h-4" />{busy ? "Working…" : "Generate a new login key"}</Button>
           {oneTimeKey && <div className="space-y-2 rounded-xl border border-amber-300/30 p-4" role="status">

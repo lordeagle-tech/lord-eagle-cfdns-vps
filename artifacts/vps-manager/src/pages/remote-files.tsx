@@ -139,7 +139,7 @@ export default function RemoteFilesPage() {
       {notice && <div className="mx-4 mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-200">{notice}</div>}
       <div className="p-3 sm:p-4 border-b border-white/10 flex flex-wrap gap-2 items-center bg-[#111113]">
         <Button size="sm" variant="ghost" onClick={() => listing?.parentPath && void loadDirectory(listing.parentPath)} disabled={!listing?.parentPath || loading || import.meta.env.DEV}><ArrowUp className="w-4 h-4" /></Button>
-        <form className="flex-1 min-w-[220px] flex gap-2" onSubmit={(event) => { event.preventDefault(); void loadDirectory(pathInput); }}>
+        <form className="flex min-w-0 flex-1 basis-[calc(100%-3rem)] gap-2 sm:basis-auto" onSubmit={(event) => { event.preventDefault(); void loadDirectory(pathInput); }}>
           <input value={pathInput} onChange={(event) => setPathInput(event.target.value)} disabled={!trusted || import.meta.env.DEV} className="flex-1 min-w-0 h-9 rounded-md border border-white/10 bg-black px-3 font-mono text-xs outline-none focus:border-[#ff5a1f]/50" aria-label="Remote path" />
           <Button type="submit" size="sm" variant="outline" disabled={loading || !trusted || import.meta.env.DEV}>Go</Button>
         </form>
@@ -156,8 +156,8 @@ export default function RemoteFilesPage() {
                 <span className="truncate text-sm">{entry.name}</span><span className="hidden sm:inline text-[10px] text-muted-foreground font-mono">{entry.permissions}</span>
               </button>
               <span className="hidden md:inline text-[10px] text-muted-foreground">{formatSize(entry.size)}</span>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void renameEntry(entry)} disabled={busy || !trusted || import.meta.env.DEV} title="Rename"><Pencil className="w-3.5 h-3.5" /></Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-300" onClick={() => void deleteEntry(entry)} disabled={busy || !trusted || import.meta.env.DEV} title="Delete"><Trash2 className="w-3.5 h-3.5" /></Button>
+              <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7" onClick={() => void renameEntry(entry)} disabled={busy || !trusted || import.meta.env.DEV} title="Rename"><Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></Button>
+              <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-red-300" onClick={() => void deleteEntry(entry)} disabled={busy || !trusted || import.meta.env.DEV} title="Delete"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></Button>
             </div>
           ))}
         </section>

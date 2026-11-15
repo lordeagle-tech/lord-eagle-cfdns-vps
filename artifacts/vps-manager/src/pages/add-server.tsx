@@ -91,21 +91,21 @@ export default function AddServer() {
   const authType = form.watch("authType");
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full">
+    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-8 max-w-4xl mx-auto w-full">
       <div className="mb-6">
         <Link href="/" className="inline-flex items-center text-sm font-mono text-muted-foreground hover:text-primary mb-4" data-testid="link-back">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
         </Link>
-        <h1 className="text-3xl font-mono font-bold text-foreground tracking-tight flex items-center">
-          <Server className="w-8 h-8 mr-3 text-primary" />
+        <h1 className="text-2xl sm:text-3xl font-mono font-bold text-foreground tracking-tight flex items-center">
+          <Server className="w-7 h-7 sm:w-8 sm:h-8 mr-3 text-primary shrink-0" />
           Register_Node
         </h1>
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}
                 name="name"

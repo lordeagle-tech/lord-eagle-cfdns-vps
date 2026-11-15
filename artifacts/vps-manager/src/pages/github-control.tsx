@@ -358,8 +358,8 @@ export default function GithubControlPage() {
               <p className="text-[10px] text-muted-foreground md:col-span-3">Creates the repository on your GitHub account and initializes its default branch with a README.</p>
             </form>}
 
-            <div className="grid min-h-[620px] gap-4 xl:grid-cols-[minmax(280px,350px)_minmax(0,1fr)]">
-              <section className="flex min-h-[440px] flex-col overflow-hidden rounded-2xl border border-white/[.07] bg-[#15181b]">
+            <div className="grid min-h-0 gap-4 lg:min-h-[620px] xl:grid-cols-[minmax(280px,350px)_minmax(0,1fr)]">
+              <section className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border border-white/[.07] bg-[#15181b] sm:min-h-[360px] lg:min-h-[440px]">
                 <div className="border-b border-white/[.06] p-4">
                   <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">Your repositories</h2><span className="text-[10px] text-muted-foreground">{repos.length}{hasMore ? "+" : ""}</span></div>
                   <div className="relative"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input value={repoQuery} onChange={(event) => setRepoQuery(event.target.value)} placeholder="Filter repositories" className="h-9 pl-9 text-xs" /></div>
