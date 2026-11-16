@@ -67,6 +67,15 @@ export const siteLinksTable = mysqlTable("site_links", {
   createdAt: datetime("created_at", { mode: "date" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({ uniqueHost: uniqueIndex("site_link_unique").on(table.ownerId, table.hostname), serverIdx: index("site_links_server_idx").on(table.serverId) }));
 
+export const githubSshKeysTable = mysqlTable("github_ssh_keys", {
+  id: int("id").primaryKey(),
+  privateKeyEncrypted: text("private_key_encrypted").notNull(),
+  publicKey: text("public_key").notNull(),
+  fingerprint: varchar("fingerprint", { length: 191 }).notNull(),
+  createdAt: datetime("created_at", { mode: "date" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime("updated_at", { mode: "date" }).notNull().default(sql`CURRENT_TIMESTAMP`).$onUpdateFn(() => new Date()),
+});
+
 export const auditLogsTable = mysqlTable("audit_logs", {
   id: int("id").autoincrement().primaryKey(),
   ownerId: int("owner_id").notNull(),

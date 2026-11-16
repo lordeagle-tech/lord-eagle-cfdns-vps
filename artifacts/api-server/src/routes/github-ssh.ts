@@ -1,9 +1,15 @@
 import { Router, type Request } from "express";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { audit } from "../security/audit";
+import {
+  generateGithubKeypair,
+  githubRuntimeKeyPath,
+  loadGithubKey,
+  materializeGithubKey,
+  saveGithubKey,
+} from "../github-key-store";
 
 const router = Router();
 const KEY_TYPE = "github_ed25519";
@@ -41,7 +47,7 @@ function githubSshEnabled(): boolean {
 }
 
 function configuredPaths(): { keyPath: string; knownHostsPath: string } | null {
-  const keyPath = process.env.GITHUB_SSH_KEY_PATH ?? "";
+  const keyPath = githubRuntimeKeyPath();
   const knownHostsPath = process.env.GITHUB_SSH_KNOWN_HOSTS ?? "";
   const safePath = (value: string) => path.isAbsolute(value) && /^[A-Za-z0-9_./-]+$/.test(value);
   if (!safePath(keyPath) || !safePath(knownHostsPath)) return null;
@@ -52,25 +58,9 @@ async function getKeyInfo(): Promise<{
   publicKey: string;
   fingerprint: string;
 } | null> {
-  const paths = configuredPaths();
-  if (!paths) return null;
-  try {
-    const [privateStat, publicStat, publicKey] = await Promise.all([
-      fs.stat(paths.keyPath),
-      fs.stat(`${paths.keyPath}.pub`),
-      fs.readFile(`${paths.keyPath}.pub`, "utf8"),
-    ]);
-    if (!privateStat.isFile() || !publicStat.isFile() || (privateStat.mode & 0o077) !== 0) return null;
-    const keyText = publicKey.trim();
-    if (!keyText || keyText.length > 4096) return null;
-    const fingerprintResult = await execFileResult("ssh-keygen", ["-lf", `${paths.keyPath}.pub`, "-E", "sha256"], 5000);
-    if (fingerprintResult.code !== 0) return null;
-    const fingerprint = fingerprintResult.stdout.trim().split(/\s+/)[1] ?? "";
-    if (!fingerprint.startsWith("SHA256:")) return null;
-    return { publicKey: keyText, fingerprint };
-  } catch {
-    return null;
-  }
+  const key = await loadGithubKey();
+  if (!key || !key.publicKey || key.publicKey.length > 4096) return null;
+  return { publicKey: key.publicKey, fingerprint: key.fingerprint };
 }
 
 function takeTestToken(ownerId: number): boolean {
@@ -123,9 +113,10 @@ function gitSshCommand(keyPath: string, knownHostsPath: string): string {
 }
 
 async function testConnection(req: Request, repo: string | null) {
+  const materialized = await materializeGithubKey();
   const paths = configuredPaths();
   const key = await getKeyInfo();
-  if (!paths || !key) {
+  if (!materialized || !paths || !key) {
     return { status: 409, body: { error: "The dedicated GitHub SSH key is not ready on this VPS." } };
   }
   try {
@@ -192,28 +183,15 @@ router.get("/github/ssh-key", async (req, res) => {
 
 router.post("/github/ssh-key/generate", async (req, res) => {
   if (!githubSshEnabled()) return res.status(403).json({ error: "GitHub SSH setup is available only on an enabled production VPS." });
-  const paths = configuredPaths();
-  if (!paths) return res.status(503).json({ error: "GitHub SSH key paths are not configured on this VPS." });
   try {
-    const parent = path.dirname(paths.keyPath);
-    await fs.mkdir(parent, { recursive: true, mode: 0o700 });
-    await fs.chmod(parent, 0o700);
-    try {
-      await fs.access(paths.keyPath);
+    if (await loadGithubKey()) {
       return res.status(409).json({ error: "A GitHub SSH key already exists. It will not be overwritten." });
-    } catch { /* no private key at the configured path */ }
-    try {
-      await fs.access(`${paths.keyPath}.pub`);
-      return res.status(409).json({ error: "A public key already exists without its private key. Refusing to replace or pair keys automatically." });
-    } catch { /* no public key at the configured path */ }
-
-    const comment = `cfdns-manager@${os.hostname().replace(/[^A-Za-z0-9.-]/g, "-")}`;
-    const generated = await execFileResult("ssh-keygen", ["-q", "-t", "ed25519", "-C", comment, "-N", "", "-f", paths.keyPath], 10_000);
-    if (generated.code !== 0) throw new Error(truncate(generated.stderr) || "ssh-keygen failed.");
-    await fs.chmod(paths.keyPath, 0o600);
-    await fs.chmod(`${paths.keyPath}.pub`, 0o644);
+    }
+    const generated = await generateGithubKeypair();
+    await saveGithubKey(generated);
+    await materializeGithubKey();
     const key = await getKeyInfo();
-    if (!key) throw new Error("The new key could not be validated. Check the service account's file permissions.");
+    if (!key) throw new Error("The new key could not be validated.");
     const ownerId = Number(req.user?.id ?? 0);
     if (ownerId) lastTestByOwner.delete(ownerId);
     await audit(req, "github.ssh_key.generate", "github_ssh", KEY_TYPE, "success");

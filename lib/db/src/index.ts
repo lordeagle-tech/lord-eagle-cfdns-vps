@@ -21,6 +21,7 @@ export async function ensureDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS audit_logs (id INT AUTO_INCREMENT PRIMARY KEY, owner_id INT NOT NULL, action VARCHAR(128) NOT NULL, target_type VARCHAR(64) NOT NULL, target_id VARCHAR(191), status VARCHAR(32) NOT NULL, metadata TEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX audit_owner_idx (owner_id), INDEX audit_created_idx (created_at))`,
     `CREATE TABLE IF NOT EXISTS auth_rate_limits (bucket_key VARCHAR(191) PRIMARY KEY, window_started_at DATETIME NOT NULL, attempts INT NOT NULL DEFAULT 0, blocked_until DATETIME NULL, INDEX auth_rate_expiry_idx (window_started_at))`,
     `CREATE TABLE IF NOT EXISTS github_account_connections (owner_id INT NOT NULL PRIMARY KEY, token_encrypted TEXT NOT NULL, username VARCHAR(191) NOT NULL, scopes VARCHAR(512) NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS github_ssh_keys (id INT PRIMARY KEY, private_key_encrypted TEXT NOT NULL, public_key TEXT NOT NULL, fingerprint VARCHAR(191) NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`,
   ];
   for (const statement of statements) await pool.query(statement);
   for (const column of ["host_fingerprint", "pending_host_fingerprint"]) {

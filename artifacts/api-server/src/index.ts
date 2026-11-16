@@ -2,13 +2,15 @@ import app from "./app";
 import { createServer } from "node:http";
 import { logger } from "./lib/logger";
 import { attachInteractiveTerminal } from "./lib/interactive-terminal";
+import { bootstrapGithubKey } from "./github-key-store";
 import { ensureDatabase } from "@workspace/db";
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 if (!Number.isFinite(port) || port <= 0) throw new Error(`Invalid PORT value: "${process.env.PORT ?? ""}"`);
 
-ensureDatabase().then(() => {
+ensureDatabase().then(async () => {
+  await bootstrapGithubKey();
   const server = createServer(app);
   attachInteractiveTerminal(server);
   server.listen(port, host, () => logger.info({ port, host }, "CFDNS Manager by Lord Eagle listening"));

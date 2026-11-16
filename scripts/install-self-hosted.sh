@@ -134,6 +134,7 @@ ADMIN_EMAILS=
 ADMIN_OPEN_IDS=
 ADMIN_IP_ALLOWLIST=
 API_KEY_FILE=${API_KEY_FILE}
+API_KEY=${API_KEY}
 FILE_MANAGER_ROOTS=/var/www,/opt/cfdns-manager
 DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@127.0.0.1:3306/${DB_NAME}
 APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY}
@@ -162,6 +163,8 @@ Group=${APP_USER}
 WorkingDirectory=${APP_DIR}
 Environment=HOME=${APP_HOME}
 EnvironmentFile=${ENV_FILE}
+RuntimeDirectory=cfdns-manager
+RuntimeDirectoryMode=0700
 ExecStart=/usr/bin/node --enable-source-maps artifacts/api-server/dist/index.mjs
 Restart=on-failure
 RestartSec=5
@@ -178,7 +181,7 @@ ProtectClock=true
 RestrictSUIDSGID=true
 LockPersonality=true
 UMask=0077
-ReadWritePaths=${APP_DIR} ${APP_HOME} ${GITHUB_SSH_DIR} /var/www
+ReadWritePaths=${APP_DIR} ${APP_HOME} ${GITHUB_SSH_DIR} /var/www /run/cfdns-manager
 
 [Install]
 WantedBy=multi-user.target
