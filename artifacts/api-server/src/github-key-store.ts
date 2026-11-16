@@ -87,7 +87,10 @@ export async function materializeGithubKey(): Promise<GitHubKey | null> {
 }
 
 export async function generateGithubKeypair(): Promise<GitHubKey> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cfdns-gh-"));
+  const runtimeDir = githubRuntimeDir();
+  await fs.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+  await fs.chmod(runtimeDir, 0o700);
+  const dir = await fs.mkdtemp(path.join(runtimeDir, "gen-"));
   try {
     const keyPath = path.join(dir, "github_ed25519");
     const comment = `cfdns-manager@${os.hostname().replace(/[^A-Za-z0-9.-]/g, "-")}`;
@@ -105,14 +108,30 @@ export async function generateGithubKeypair(): Promise<GitHubKey> {
   }
 }
 
+async function removeLegacyGithubKey(legacyPath: string): Promise<void> {
+  await Promise.all([legacyPath, `${legacyPath}.pub`].map(async (target) => {
+    try {
+      await fs.unlink(target);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }));
+}
+
 export async function bootstrapGithubKey(): Promise<void> {
   try {
+    const legacyPath = process.env.GITHUB_SSH_KEY_PATH ?? "";
+    const validLegacyPath = Boolean(legacyPath) && path.isAbsolute(legacyPath);
     if (await loadGithubKey()) {
       await materializeGithubKey();
+      if (validLegacyPath) {
+        await removeLegacyGithubKey(legacyPath).catch((error) => {
+          logger.warn({ err: error, legacyPath }, "Could not remove the legacy GitHub SSH key file");
+        });
+      }
       return;
     }
-    const legacyPath = process.env.GITHUB_SSH_KEY_PATH ?? "";
-    if (!legacyPath || !path.isAbsolute(legacyPath)) return;
+    if (!validLegacyPath) return;
     const [privateStat, privateKey, publicKey] = await Promise.all([
       fs.stat(legacyPath),
       fs.readFile(legacyPath, "utf8"),
@@ -123,8 +142,9 @@ export async function bootstrapGithubKey(): Promise<void> {
     if (!fingerprint) return;
     await saveGithubKey({ privateKey, publicKey: publicKey.trim(), fingerprint });
     await materializeGithubKey();
-    await fs.rm(legacyPath, { force: true });
-    await fs.rm(`${legacyPath}.pub`, { force: true });
+    await removeLegacyGithubKey(legacyPath).catch((error) => {
+      logger.warn({ err: error, legacyPath }, "Could not remove the legacy GitHub SSH key file");
+    });
     logger.info({ fingerprint }, "Migrated GitHub SSH key into encrypted database");
   } catch (error) {
     logger.warn({ err: error }, "GitHub SSH key bootstrap skipped");
