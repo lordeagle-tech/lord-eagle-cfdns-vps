@@ -1,41 +1,38 @@
 /**
- * Generate XCASPER MANAGER favicon PNG files from SVG source using canvas rendering.
- * Run: node scripts/gen-favicon.mjs
- * Outputs: public/favicon-16.png and public/favicon-32.png
+ * Generate CFDNS Manager favicon PNG files from the Lord Eagle logo SVG.
+ * Run from the repo root (needs @resvg/resvg-js): node scripts/gen-favicon.mjs
+ * Outputs: public/favicon-*.png, public/apple-touch-icon.png, public/favicon.svg
  */
 import { Resvg } from "@resvg/resvg-js";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(__dir, "..", "public");
 
-function buildSvg(size) {
-  const rx = Math.round(size * 0.22);
-  const fontSize = Math.round(size * 0.72);
-  const cy = Math.round(size * 0.76);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6e5cff"/>
-      <stop offset="100%" stop-color="#0ff4c6"/>
-    </linearGradient>
-  </defs>
-  <rect width="${size}" height="${size}" rx="${rx}" fill="#08090d"/>
-  <text x="${size / 2}" y="${cy}" text-anchor="middle"
-        font-family="sans-serif" font-weight="900" font-size="${fontSize}"
-        fill="url(#g)">X</text>
-</svg>`;
-}
+const source = readFileSync(join(PUBLIC, "lord-eagle-logo.svg"), "utf8");
+const iconSvg = source.replace(/rx="56"/, 'rx="0"');
 
-for (const size of [16, 32]) {
-  const svg = buildSvg(size);
-  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: size } });
+const targets = [
+  ["favicon-16.png", 16],
+  ["favicon-32.png", 32],
+  ["favicon-48.png", 48],
+  ["favicon-96.png", 96],
+  ["favicon-180.png", 180],
+  ["favicon-192.png", 192],
+  ["favicon-512.png", 512],
+  ["apple-touch-icon.png", 180],
+];
+
+for (const [name, size] of targets) {
+  const resvg = new Resvg(iconSvg, { fitTo: { mode: "width", value: size } });
   const png = resvg.render().asPng();
-  const outPath = join(PUBLIC, `favicon-${size}.png`);
+  const outPath = join(PUBLIC, name);
   writeFileSync(outPath, png);
-  console.log(`✓ favicon-${size}.png  (${png.length} B)  →  ${outPath}`);
+  console.log(`✓ ${name}  ${size}x${size}  (${png.length} B)`);
 }
 
+writeFileSync(join(PUBLIC, "favicon.svg"), iconSvg);
+console.log("✓ favicon.svg");
 console.log("Done.");
