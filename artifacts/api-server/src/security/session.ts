@@ -95,16 +95,13 @@ export async function createSession(user: AppUser): Promise<string> {
   return token;
 }
 
-/** Exchange the installer's API key for a revocable HttpOnly browser session. */
-export async function loginWithApiKey(req: Request, res: Response): Promise<AppUser | null> {
+/** Validate the installer's API key without issuing a session before MFA is checked. */
+export async function authenticateApiKey(req: Request): Promise<AppUser | null> {
   const auth = req.headers.authorization ?? "";
   const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   const configured = getApiKey() ?? "";
   if (!bearer || !configured || !safeEqual(bearer, configured)) return null;
-  const user = await upsertUser({ openId: "local-api-key-owner", name: "Local owner" }, "admin");
-  const session = await createSession(user);
-  setSessionCookie(res, session, SESSION_DAYS * 86400);
-  return user;
+  return upsertUser({ openId: "local-api-key-owner", name: "Local owner" }, "admin");
 }
 
 export async function currentUser(req: Request): Promise<AppUser | null> {
@@ -147,7 +144,7 @@ export function beginOAuth(req: Request, res: Response): void {
   res.redirect(url.toString());
 }
 
-export async function completeOAuth(req: Request, res: Response): Promise<void> {
+export async function completeOAuth(req: Request): Promise<AppUser> {
   const code = typeof req.query.code === "string" ? req.query.code : "";
   const state = typeof req.query.state === "string" ? req.query.state : "";
   const nonce = cookieValue(req, OAUTH_COOKIE);
@@ -183,10 +180,11 @@ export async function completeOAuth(req: Request, res: Response): Promise<void> 
     throw new Error("This account is not on the panel administrator allowlist");
   }
   const user = await upsertUser({ openId: identity.openId, email: identity.email, name: identity.name }, "admin");
-  const session = await createSession(user);
-  setSessionCookie(res, session, SESSION_DAYS * 86400);
+  return user;
+}
+
+export function clearOAuthCookie(res: Response): void {
   res.clearCookie(OAUTH_COOKIE, { httpOnly: true, secure: true, sameSite: sessionSameSite(), path: "/" });
-  res.redirect("/");
 }
 
 export async function destroySession(req: Request, res: Response): Promise<void> {

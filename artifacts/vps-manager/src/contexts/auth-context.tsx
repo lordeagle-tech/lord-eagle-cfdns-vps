@@ -7,7 +7,8 @@ interface AuthContextValue {
   loading: boolean;
   isAuthenticated: boolean;
   welcomeShown: boolean;
-  login: (key: string, options?: { onVerified?: () => void }) => Promise<{ ok: boolean; error?: string }>;
+  login: (key: string, options?: { onVerified?: () => void }) => Promise<{ ok: boolean; error?: string; mfaRequired?: boolean }>;
+  completeMfa: (code: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   dismissWelcome: () => void;
 }
@@ -36,10 +37,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/key-login", { method: "POST", credentials: "include", headers: { Authorization: `Bearer ${key}` } });
       if (!res.ok) { const body = await res.json().catch(() => ({})); return { ok: false, error: body?.error ?? "Invalid access key" }; }
       const body = await res.json();
+      if (body.mfaRequired) return { ok: false, mfaRequired: true };
       await new Promise((resolve) => setTimeout(resolve, 1400));
       options?.onVerified?.();
       await new Promise((resolve) => setTimeout(resolve, 1500));
       setUser(body.user as User); return { ok: true };
+    } catch { return { ok: false, error: "Cannot reach the service" }; }
+  }, []);
+  const completeMfa = useCallback(async (code: string) => {
+    try {
+      const res = await fetch("/api/auth/mfa/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: body?.error ?? "Multi-factor verification failed" };
+      setUser(body.user as User);
+      return { ok: true };
     } catch { return { ok: false, error: "Cannot reach the service" }; }
   }, []);
   const logout = useCallback(() => {
@@ -51,6 +67,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { sessionStorage.setItem(WELCOME_KEY, "true"); } catch { /* Storage may be disabled by browser policy. */ }
     setWelcomeShown(true);
   }, []);
-  return <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, welcomeShown, login, logout, dismissWelcome }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, welcomeShown, login, completeMfa, logout, dismissWelcome }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() { const ctx = useContext(AuthContext); if (!ctx) throw new Error("useAuth must be used within AuthProvider"); return ctx; }
