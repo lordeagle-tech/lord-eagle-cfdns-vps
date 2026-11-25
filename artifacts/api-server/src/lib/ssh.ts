@@ -109,6 +109,7 @@ export function execCommand(
   client: Client,
   command: string,
   timeoutMs = 30000,
+  options: { continueOnOutputLimit?: boolean } = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
     client.exec(command, (err, stream) => {
@@ -125,13 +126,17 @@ export function execCommand(
       const collect = (target: "stdout" | "stderr", data: Buffer) => {
         if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) >= maxOutput) {
           overflow = true;
-          stream.close();
+          if (!options.continueOnOutputLimit) stream.close();
           return;
         }
         const remaining = maxOutput - Buffer.byteLength(stdout) - Buffer.byteLength(stderr);
-        const value = data.toString("utf8").slice(0, remaining);
+        const value = data.subarray(0, remaining).toString("utf8");
         if (target === "stdout") stdout += value;
         else stderr += value;
+        if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) >= maxOutput) {
+          overflow = true;
+          if (!options.continueOnOutputLimit) stream.close();
+        }
       };
       stream.on("data", (data: Buffer) => collect("stdout", data));
       stream.stderr.on("data", (data: Buffer) => collect("stderr", data));
@@ -140,7 +145,7 @@ export function execCommand(
         resolve({
           stdout,
           stderr: timedOut ? `${stderr}\nCommand timed out after ${timeoutMs} ms.`.trim() : overflow ? `${stderr}\nOutput truncated at 2 MB.`.trim() : stderr,
-          exitCode: timedOut ? 124 : overflow ? 125 : code ?? 0,
+          exitCode: timedOut ? 124 : overflow && !options.continueOnOutputLimit ? 125 : code ?? 0,
         });
       });
       stream.on("error", (error: Error) => { clearTimeout(timer); reject(error); });
@@ -162,7 +167,7 @@ export function sftpReadFile(sftp: SFTPWrapper, remotePath: string): Promise<Buf
   return new Promise((resolve, reject) => { sftp.readFile(remotePath, (err, data) => { if (err) reject(err); else resolve(data); }); });
 }
 
-export function sftpWriteFile(sftp: SFTPWrapper, remotePath: string, data: string): Promise<void> {
+export function sftpWriteFile(sftp: SFTPWrapper, remotePath: string, data: string | Buffer): Promise<void> {
   return new Promise((resolve, reject) => { sftp.writeFile(remotePath, data, (err) => { if (err) reject(err); else resolve(); }); });
 }
 

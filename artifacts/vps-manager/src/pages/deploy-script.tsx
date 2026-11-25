@@ -10,6 +10,8 @@ type Branch = { name: string; protected: boolean };
 type ServerConnection = { id: number; name: string; host: string; username: string; port: number; hostFingerprint?: string | null; status?: string };
 type ReviewedScript = { path: string; name: string; sha: string; size: number; content: string; sha256: string; ref: string };
 type RunResult = { ok: boolean; server: { id: number; name: string; host: string; username: string }; source: { owner: string; repo: string; path: string; ref: string; sha256: string }; exitCode: number; stdout: string; stderr: string; durationLimitMs: number };
+type ReviewedInstaller = { owner: string; repo: string; path: string; ref: string; blobSha: string; sha256: string; size: number; content: string };
+type ProjectInstallStatus = { status: "running"; step: string } | { status: "completed"; result: RunResult } | { status: "failed"; error: string };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, { credentials: "include", cache: "no-store", ...init });
@@ -41,10 +43,22 @@ export default function DeployScriptPage() {
   const [confirmValue, setConfirmValue] = useState("");
   const [runResult, setRunResult] = useState<RunResult | { error: string } | null>(null);
   const [typedAck, setTypedAck] = useState(false);
+  const [installerServerId, setInstallerServerId] = useState("");
+  const [installerDomain, setInstallerDomain] = useState("");
+  const [installerEmail, setInstallerEmail] = useState("");
+  const [installerReviewed, setInstallerReviewed] = useState<ReviewedInstaller | null>(null);
+  const [reviewingInstaller, setReviewingInstaller] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [installerStep, setInstallerStep] = useState("starting");
+  const [installerConfirmation, setInstallerConfirmation] = useState("");
+  const [installerAck, setInstallerAck] = useState(false);
+  const [installerResult, setInstallerResult] = useState<RunResult | { error: string } | null>(null);
 
   const selectedServer = useMemo(() => servers.find((item) => item.id === Number(serverId)) ?? null, [servers, serverId]);
+  const selectedInstallerServer = useMemo(() => servers.find((item) => item.id === Number(installerServerId)) ?? null, [servers, installerServerId]);
   const selectedRepo = useMemo(() => repos.find((item) => item.name === repoName) ?? null, [repos, repoName]);
   const deployConfirmation = serverId ? `DEPLOY ${serverId}` : "";
+  const installerConfirmationText = installerServerId ? `INSTALL ${installerServerId}` : "";
   const liveCapable = !import.meta.env.DEV;
 
   const loadInitial = useCallback(async () => {
@@ -95,6 +109,54 @@ export default function DeployScriptPage() {
     finally { setReviewing(false); }
   }
 
+  async function reviewProjectInstaller(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedInstallerServer || !installerDomain.trim() || !installerEmail.trim()) return;
+    setReviewingInstaller(true); setInstallerReviewed(null); setInstallerResult(null); setInstallerConfirmation(""); setInstallerAck(false);
+    try {
+      const result = await request<ReviewedInstaller>("/api/deployments/project-installer");
+      setInstallerReviewed(result);
+      toast({ title: "Project installer ready for review", description: `Pinned commit ${result.ref.slice(0, 12)} · SHA-256 ${result.sha256.slice(0, 16)}…` });
+    } catch (error) {
+      toast({ title: "Could not review project installer", description: error instanceof Error ? error.message : "Check the encrypted GitHub connection.", variant: "destructive" });
+    } finally { setReviewingInstaller(false); }
+  }
+
+  async function installProject(event: React.FormEvent) {
+    event.preventDefault();
+    if (!installerReviewed || !selectedInstallerServer || !installerAck || installerConfirmation !== installerConfirmationText) return;
+    setInstalling(true); setInstallerResult(null); setInstallerStep("starting");
+    try {
+      const { jobId } = await request<{ jobId: string }>("/api/deployments/install-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serverId: selectedInstallerServer.id,
+          domain: installerDomain.trim(),
+          email: installerEmail.trim(),
+          ref: installerReviewed.ref,
+          blobSha: installerReviewed.blobSha,
+          sha256: installerReviewed.sha256,
+          confirmation: installerConfirmation,
+          acknowledged: installerAck,
+        }),
+      });
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const status = await request<ProjectInstallStatus>(`/api/deployments/project-install/${encodeURIComponent(jobId)}`);
+        if (status.status === "running") { setInstallerStep(status.step); continue; }
+        if (status.status === "failed") throw new Error(status.error);
+        setInstallerResult(status.result);
+        toast({ title: status.result.ok ? "Installation completed" : `Installer exited with code ${status.result.exitCode}`, description: `${selectedInstallerServer.name} · ${installerDomain}`, variant: status.result.ok ? "default" : "destructive" });
+        break;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Project installation failed";
+      setInstallerResult({ error: message });
+      toast({ title: "Project installation failed", description: message, variant: "destructive" });
+    } finally { setInstalling(false); }
+  }
+
   async function runScript(event: React.FormEvent) {
     event.preventDefault();
     if (!reviewed || !selectedServer || !selectedRepo || !github?.username || !typedAck || confirmValue !== deployConfirmation) return;
@@ -114,6 +176,7 @@ export default function DeployScriptPage() {
   }
 
   const hostOptions = servers.filter((item) => item.hostFingerprint);
+  const rootHostOptions = hostOptions.filter((item) => item.username === "root");
 
   return <div className="flex-1 min-h-0 overflow-y-auto bg-[#0e1012]">
     <div className="mx-auto max-w-screen-xl space-y-5 px-4 py-6 sm:px-6">
@@ -128,6 +191,31 @@ export default function DeployScriptPage() {
       {!loading && github?.source === "server-env" && <div className="rounded-xl border border-amber-200/15 bg-amber-200/[.04] p-4 text-xs leading-relaxed text-amber-100">This server uses an environment-managed GitHub token. Script deployments require a per-admin encrypted GitHub connection; connect one in GitHub Control.</div>}
       {!loading && !hostOptions.length && <div className="rounded-xl border border-white/[.07] bg-white/[.02] p-4 text-sm text-muted-foreground">No pinned VPS connections are ready. Add a server under <a className="text-[#e6ad68] underline underline-offset-2" href="/connections">VPS Connections</a>, test its SSH key, and verify the host fingerprint first.</div>}
 
+      <section className="space-y-4 rounded-2xl border border-red-300/15 bg-[#15181b] p-4 sm:p-5">
+        <div className="flex items-start gap-3"><span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-red-300/[.08] text-xs font-black text-red-200">!</span><div><h2 className="text-sm font-bold">Install CFDNS Manager on a fresh VPS</h2><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Uses only this project’s pinned installer from <code>lordeagle-tech/lord-eagle-cfdns-vps</code>. It is for a fresh Ubuntu/Debian server, requires a root SSH profile, and installs system packages, MariaDB, Nginx, and TLS.</p></div></div>
+        {!rootHostOptions.length && <p className="rounded-lg border border-amber-200/15 bg-amber-200/[.04] p-3 text-xs text-amber-100">No pinned root SSH connection is available. Add a root connection, test it, and verify its SSH host fingerprint. This installer will not elevate a non-root account.</p>}
+        <form onSubmit={reviewProjectInstaller} className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1.5 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><Server className="h-3.5 w-3.5" />Fresh VPS (root)</span><select required value={installerServerId} onChange={(event) => { setInstallerServerId(event.target.value); setInstallerReviewed(null); setInstallerResult(null); setInstallerConfirmation(""); setInstallerAck(false); }} disabled={!rootHostOptions.length} className="h-10 w-full rounded-md border border-white/10 bg-[#101214] px-3 text-xs text-foreground outline-none focus:border-[#e6ad68]/50"><option value="">Select a pinned root VPS…</option>{rootHostOptions.map((host) => <option key={host.id} value={host.id}>{host.name} · root@{host.host}</option>)}</select></label>
+            <label className="space-y-1.5 text-xs text-muted-foreground"><span>Panel domain</span><Input required value={installerDomain} onChange={(event) => { setInstallerDomain(event.target.value); setInstallerConfirmation(""); setInstallerAck(false); setInstallerResult(null); }} placeholder="panel.example.com" className="h-10 text-xs" /></label>
+            <label className="space-y-1.5 text-xs text-muted-foreground"><span>TLS contact email</span><Input required type="email" value={installerEmail} onChange={(event) => { setInstallerEmail(event.target.value); setInstallerConfirmation(""); setInstallerAck(false); setInstallerResult(null); }} placeholder="admin@example.com" className="h-10 text-xs" /></label>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="max-w-2xl text-[10px] leading-relaxed text-muted-foreground">Before starting, point the domain to this VPS and allow inbound TCP 80/443. The installer refuses an existing CFDNS Manager installation. Its initial login key stays in a root-only file on the VPS.</p><Button type="submit" disabled={reviewingInstaller || !selectedInstallerServer || github?.source !== "encrypted-settings" || !installerDomain.trim() || !installerEmail.trim()} className="gap-2 bg-[#e6ad68] text-[#14110e] hover:bg-[#f0c58f]">{reviewingInstaller ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Review fixed installer</Button></div>
+        </form>
+
+        {installerReviewed && selectedInstallerServer && <div className="space-y-3 rounded-xl border border-white/[.07] bg-black/[.12] p-4">
+          <div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-semibold">Review the exact installer</h3><a href={`https://github.com/${installerReviewed.owner}/${installerReviewed.repo}/blob/${installerReviewed.ref}/${installerReviewed.path}`} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all text-[10px] text-[#e6ad68] hover:underline">{installerReviewed.owner}/{installerReviewed.repo}/{installerReviewed.path} · commit {installerReviewed.ref.slice(0, 12)} <ExternalLink className="inline h-3 w-3" /></a><p className="mt-1 break-all font-mono text-[9px] text-muted-foreground/70">GitHub blob {installerReviewed.blobSha} · SHA-256 {installerReviewed.sha256}</p></div><span className="shrink-0 rounded-full border border-emerald-200/15 bg-emerald-200/[.05] px-2 py-0.5 text-[9px] text-emerald-100">{sizeLabel(installerReviewed.size)}</span></div>
+          <pre className="max-h-[360px] overflow-auto rounded-xl border border-white/[.07] bg-[#0d0f10] p-3 font-mono text-[10px] leading-relaxed text-foreground/85"><code>{installerReviewed.content}</code></pre>
+          {!liveCapable ? <p className="rounded-lg border border-amber-200/15 bg-amber-200/[.04] p-3 text-xs text-amber-100">Installation is disabled in shared Preview and development. Deploy the panel to your own HTTPS VPS to install.</p> : <form onSubmit={installProject} className="space-y-3 rounded-lg border border-red-300/15 bg-red-300/[.035] p-3">
+            <label className="block space-y-1.5 text-[10px] text-muted-foreground">Type <code className="text-amber-100">{installerConfirmationText}</code> to confirm installation on <code>{selectedInstallerServer.name} ({selectedInstallerServer.host})</code> for <code>{installerDomain}</code>.<Input autoComplete="off" value={installerConfirmation} onChange={(event) => setInstallerConfirmation(event.target.value)} placeholder={installerConfirmationText} className="h-9 max-w-sm font-mono text-xs" /></label>
+            <label className="flex items-start gap-2 text-[10px] leading-relaxed text-muted-foreground"><input type="checkbox" checked={installerAck} onChange={(event) => { setInstallerAck(event.target.checked); if (!event.target.checked) setInstallerConfirmation(""); }} className="mt-0.5 accent-red-400" />I reviewed the pinned project installer, confirmed this is a fresh Ubuntu/Debian VPS, and authorize its system-wide setup as root.</label>
+            <Button type="submit" disabled={installing || !installerAck || installerConfirmation !== installerConfirmationText} className="gap-2 bg-red-700 text-white hover:bg-red-600">{installing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <TerminalSquare className="h-4 w-4" />}{installing ? `Installing: ${installerStep.replace(/-/g, " ")}…` : "Install CFDNS Manager"}</Button>
+          </form>}
+        </div>}
+      </section>
+
+      {installerResult && <section className="rounded-2xl border border-white/[.08] bg-[#15181b] p-4 sm:p-5"><div className="flex items-center gap-2">{"error" in installerResult ? <CircleX className="h-4 w-4 text-red-300" /> : installerResult.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <CircleX className="h-4 w-4 text-red-300" />}<h2 className="text-sm font-bold">{"error" in installerResult ? "Installation failed" : installerResult.ok ? "Installation completed" : `Installer exited with code ${installerResult.exitCode}`}</h2></div>{"error" in installerResult ? <p className="mt-2 text-xs text-red-200">{installerResult.error}</p> : <><p className="mt-1 text-[10px] text-muted-foreground">root@{installerResult.server.host} · {installerResult.source.owner}/{installerResult.source.repo}/{installerResult.source.path} · commit {installerResult.source.ref.slice(0, 12)}</p><div className="mt-4 grid gap-3 lg:grid-cols-2">{([["Installer output", installerResult.stdout], ["Installer errors", installerResult.stderr]] as const).map(([title, value]) => <div key={title}><h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3><pre className="max-h-72 min-h-20 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-white/[.06] bg-[#0d0f10] p-3 font-mono text-[10px] leading-relaxed">{value || "(empty)"}</pre></div>)}</div></>}</section>}
+
       <form onSubmit={reviewScript} className="rounded-2xl border border-white/[.08] bg-[#15181b] p-4 sm:p-5">
         <div className="mb-4 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#e6ad68]/10 text-xs font-black text-[#e6ad68]">1</span><div><h2 className="text-sm font-bold">Choose source and target</h2><p className="text-[10px] text-muted-foreground">Only repositories from your connected GitHub account can be selected.</p></div></div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -136,7 +224,7 @@ export default function DeployScriptPage() {
           <label className="space-y-1.5 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><GitBranch className="h-3.5 w-3.5" />Branch / ref</span><select required value={branch} onChange={(event) => { setBranch(event.target.value); setReviewed(null); setRunResult(null); }} disabled={!branches.length || loadingBranches} className="h-10 w-full rounded-md border border-white/10 bg-[#101214] px-3 text-xs text-foreground outline-none focus:border-[#e6ad68]/50"><option value="">{loadingBranches ? "Loading branches…" : "Select branch…"}</option>{branches.map((item) => <option key={item.name} value={item.name}>{item.name}{item.protected ? " · protected" : ""}</option>)}</select></label>
           <label className="space-y-1.5 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><FileCode2 className="h-3.5 w-3.5" />Script path in repository</span><Input required value={filePath} onChange={(event) => { setFilePath(event.target.value); setReviewed(null); setRunResult(null); }} placeholder="scripts/deploy.sh" className="h-10 font-mono text-xs" /></label>
         </div>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="max-w-2xl text-[10px] leading-relaxed text-muted-foreground">The script is fetched again from GitHub at execution time and must still match the reviewed GitHub blob and SHA-256. Supported file size: up to 750 KB.</p><Button type="submit" disabled={reviewing || !github?.connected || !branch || !filePath.trim()} className="gap-2 bg-[#e6ad68] text-[#14110e] hover:bg-[#f0c58f]">{reviewing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Review script</Button></div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="max-w-2xl text-[10px] leading-relaxed text-muted-foreground">On confirmation, the server downloads a verified snapshot of the selected repository and runs the reviewed script from the repository root. Rechecks the GitHub blob and SHA-256. Script size limit: 750 KB; repository snapshot limit: 200 MB.</p><Button type="submit" disabled={reviewing || !github?.connected || !branch || !filePath.trim()} className="gap-2 bg-[#e6ad68] text-[#14110e] hover:bg-[#f0c58f]">{reviewing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Review script</Button></div>
       </form>
 
       {reviewed && selectedServer && selectedRepo && <section className="space-y-4 rounded-2xl border border-[#e6ad68]/20 bg-[#15181b] p-4 sm:p-5">
@@ -144,7 +232,7 @@ export default function DeployScriptPage() {
         <pre className="max-h-[420px] overflow-auto rounded-xl border border-white/[.07] bg-[#0d0f10] p-3 font-mono text-[10px] leading-relaxed text-foreground/85"><code>{reviewed.content}</code></pre>
         <div className="grid gap-3 rounded-xl border border-amber-200/15 bg-amber-200/[.035] p-4 md:grid-cols-2">
           <div className="flex gap-2.5"><AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-200" /><div><h3 className="text-xs font-semibold text-amber-100">This runs executable code on the VPS</h3><p className="mt-1 text-[10px] leading-relaxed text-amber-100/70">Read every line. It runs as <code>{selectedServer.username}</code> on <code>{selectedServer.name} ({selectedServer.host})</code>, with that account’s permissions. The panel will not add <code>sudo</code> or prompt for a password. If the saved SSH account is root, the script runs as root.</p></div></div>
-          <div className="flex gap-2.5"><LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-200" /><div><h3 className="text-xs font-semibold text-amber-100">Execution safeguards</h3><p className="mt-1 text-[10px] leading-relaxed text-amber-100/70">Rechecks the GitHub file before transfer, stages it in a private temporary directory, pins the SSH host key, deletes the staged file afterward, logs the deployment event, and stops after 10 minutes. Script side effects remain the script’s responsibility.</p></div></div>
+          <div className="flex gap-2.5"><LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-200" /><div><h3 className="text-xs font-semibold text-amber-100">Execution safeguards</h3><p className="mt-1 text-[10px] leading-relaxed text-amber-100/70">Rechecks the GitHub file, downloads a private repository snapshot, pins the SSH host key, verifies the script SHA-256 in the snapshot, deletes staged files afterward, logs the deployment event, and stops after 10 minutes. Script side effects remain the script’s responsibility.</p></div></div>
         </div>
 
         {!liveCapable ? <p className="rounded-lg border border-amber-200/15 bg-amber-200/[.04] p-3 text-xs text-amber-100">Execution is disabled in shared Preview and development. The workflow is for your self-hosted HTTPS installation.</p> : <form onSubmit={runScript} className="space-y-3 rounded-xl border border-white/[.07] bg-black/[.12] p-4">

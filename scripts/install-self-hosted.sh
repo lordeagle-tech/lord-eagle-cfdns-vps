@@ -27,10 +27,15 @@ info() { printf '\n==> %s\n' "$*"; }
 
 if [[ "${EUID}" -ne 0 ]]; then
   command -v sudo >/dev/null 2>&1 || fail "Run this script as root or install sudo first."
+  [[ -t 0 ]] || fail "Run this installer as root when using a non-interactive terminal."
   exec sudo -E bash "$0" "$@"
 fi
 
-[[ -t 0 ]] || fail "This installer needs an interactive terminal to collect the site domain and TLS contact email."
+DOMAIN="${CFDNS_DOMAIN:-}"
+EMAIL="${ACME_EMAIL:-}"
+if [[ ! -t 0 && ( -z "$DOMAIN" || -z "$EMAIL" ) ]]; then
+  fail "A non-interactive installation requires CFDNS_DOMAIN and ACME_EMAIL."
+fi
 [[ -f "$(dirname "$(realpath "$0")")/../pnpm-lock.yaml" ]] || fail "Run this script from a clone of lordeagle-tech/lord-eagle-cfdns-vps."
 [[ ! -e "$APP_DIR" ]] || fail "$APP_DIR already exists. This installer only initializes a fresh install and will not overwrite it."
 [[ ! -e "$ENV_FILE" ]] || fail "$ENV_FILE already exists. Refusing to replace production credentials."
@@ -43,8 +48,6 @@ case "${ID:-}" in
   *) fail "This bootstrap currently supports Ubuntu and Debian only (detected: ${PRETTY_NAME:-unknown})." ;;
 esac
 
-DOMAIN="${CFDNS_DOMAIN:-}"
-EMAIL="${ACME_EMAIL:-}"
 if [[ -z "$DOMAIN" ]]; then read -r -p "Domain for the panel (its DNS A/AAAA record must point to this VPS): " DOMAIN; fi
 if [[ -z "$EMAIL" ]]; then read -r -p "Email for Let's Encrypt certificate notices: " EMAIL; fi
 DOMAIN="${DOMAIN,,}"
@@ -232,8 +235,8 @@ cat <<EOF
 
 Installation complete.
 Panel URL: https://${DOMAIN}/
-Initial admin login key: ${API_KEY}
 A root-only copy is saved at: ${CREDENTIALS_FILE}
+Read the initial admin login key from that file over a trusted root session, then remove the file after saving it securely.
 
 The API listens only on 127.0.0.1:3000 behind Nginx/TLS and runs as the unprivileged '${APP_USER}' user. The dashboard reads local system information from this VPS. A dedicated Ed25519 GitHub key was generated on the VPS; its private half stays in ${GITHUB_SSH_DIR} and the panel exposes only its public key. The built-in terminal and file manager are limited to that service account's OS permissions; this installer does not grant root shell access.
 

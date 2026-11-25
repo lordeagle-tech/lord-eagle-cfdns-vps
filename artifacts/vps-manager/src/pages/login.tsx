@@ -5,10 +5,18 @@ import { Input } from "@/components/ui/input";
 import { Check, Eye, KeyRound, Loader2, LockKeyhole, ShieldCheck, Terminal } from "lucide-react";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, completeMfa } = useAuth();
   const [key, setKey] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(() => new URLSearchParams(window.location.search).get("mfa") === "1");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const reason = new URLSearchParams(window.location.search).get("error");
+    if (reason === "rate_limited") return "Too many failed sign-in attempts. Try again in 15 minutes.";
+    if (reason === "authentication_failed") return "Authentication failed. Check your account and try again.";
+    if (reason === "oauth_unavailable") return "OAuth sign-in is not configured on this server.";
+    return null;
+  });
   const [scanPhase, setScanPhase] = useState<"idle" | "scanning" | "granted">("idle");
 
   async function handleSubmit(e: FormEvent) {
@@ -19,7 +27,22 @@ export default function LoginPage() {
     setScanPhase("scanning");
     const result = await login(key.trim(), { onVerified: () => setScanPhase("granted") });
     setLoading(false);
+    if (result.mfaRequired) {
+      setMfaRequired(true);
+      setScanPhase("idle");
+      return;
+    }
     if (!result.ok) { setScanPhase("idle"); setError(result.error ?? "Authentication failed"); }
+  }
+
+  async function handleMfaSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!mfaCode.trim()) return;
+    setLoading(true);
+    setError(null);
+    const result = await completeMfa(mfaCode.trim());
+    setLoading(false);
+    if (!result.ok) setError(result.error ?? "Multi-factor verification failed");
   }
 
   return <div className="relative min-h-full overflow-y-auto flex items-center justify-center px-4 py-5 sm:px-6 sm:py-8" style={{ background: "#0b0b0c" }}>
@@ -101,16 +124,29 @@ export default function LoginPage() {
           <div className="loop-scan-label">{scanPhase === "granted" ? <><Check className="h-3.5 w-3.5" /> ACCESS GRANTED</> : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> SCANNING CREDENTIAL</>}</div>
           <div className="loop-scan-meter"><span /></div>
         </div>}
-        <div className="flex items-start gap-3 mb-5">
-          <ShieldCheck className="w-5 h-5 mt-0.5 text-[#ff5a1f]" />
-          <div><h2 className="font-semibold text-foreground">Use your access key</h2><p className="text-xs text-muted-foreground mt-1">Enter the key configured by your administrator.</p></div>
-        </div>
-        <form onSubmit={handleSubmit} className={`space-y-3 loop-login-form ${scanPhase !== "idle" ? "is-scanning" : ""}`}>
-          <label className="text-xs font-semibold uppercase tracking-wider text-[#ffd1c2]">Access key</label>
-          <div className="relative"><KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={key} onChange={(e) => setKey(e.target.value)} type="password" autoFocus placeholder="Paste your access key" className="pl-9 font-mono" /></div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <Button type="submit" disabled={loading || !key.trim()} className="w-full" style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c", border: "none" }}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify access key"}</Button>
-        </form>
+        {mfaRequired ? <>
+          <div className="flex items-start gap-3 mb-5">
+            <ShieldCheck className="w-5 h-5 mt-0.5 text-[#ff5a1f]" />
+            <div><h2 className="font-semibold text-foreground">Verify your identity</h2><p className="text-xs text-muted-foreground mt-1">Enter the authenticator code or an unused recovery code.</p></div>
+          </div>
+          <form onSubmit={handleMfaSubmit} className="space-y-3">
+            <label htmlFor="mfa-code" className="text-xs font-semibold uppercase tracking-wider text-[#ffd1c2]">Authenticator or recovery code</label>
+            <Input id="mfa-code" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} autoComplete="one-time-code" autoFocus placeholder="Enter your code" className="font-mono" />
+            {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
+            <Button type="submit" disabled={loading || !mfaCode.trim()} className="w-full" style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c", border: "none" }}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Complete sign in"}</Button>
+          </form>
+        </> : <>
+          <div className="flex items-start gap-3 mb-5">
+            <ShieldCheck className="w-5 h-5 mt-0.5 text-[#ff5a1f]" />
+            <div><h2 className="font-semibold text-foreground">Use your access key</h2><p className="text-xs text-muted-foreground mt-1">Enter the key configured by your administrator.</p></div>
+          </div>
+          <form onSubmit={handleSubmit} className={`space-y-3 loop-login-form ${scanPhase !== "idle" ? "is-scanning" : ""}`}>
+            <label className="text-xs font-semibold uppercase tracking-wider text-[#ffd1c2]">Access key</label>
+            <div className="relative"><KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={key} onChange={(e) => setKey(e.target.value)} type="password" autoFocus placeholder="Paste your access key" className="pl-9 font-mono" /></div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <Button type="submit" disabled={loading || !key.trim()} className="w-full" style={{ background: "linear-gradient(135deg,#ff5a1f,#ffd1c2)", color: "#0b0b0c", border: "none" }}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify access key"}</Button>
+          </form>
+        </>}
       </div>
       <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground mt-6"><Terminal className="w-3.5 h-3.5 text-[#ffd1c2]" /> Credentials stay server-side; provider tokens are never shown again.</p>
     </div>
